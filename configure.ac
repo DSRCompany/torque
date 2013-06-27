@@ -121,13 +121,50 @@ AC_DEFINE_UNQUOTED(PBS_MACH, "${PBS_MACH}",
 AC_DEFINE_UNQUOTED(MACH_RESC_DEFS, "resc_def_${PBS_MACH}.c",
 		   [the machine specific resc_def_* file name])
 
+
+dnl
+dnl ##########################################################################
+dnl Use ZeroMQ if enabled
+dnl This would enable libraries linking and set ZMQ macro to use in the source code.
+dnl FIXME: Currently zeromq library would be added to linking by MOMLIBS variable
+dnl        This probably would be changed by either adding to another *LIBS pack or
+dnl        to own ZMQLIBS variable. In the second case it would be integrated to be
+dnl        linked with corresponding modules (to see how grep for MOMLIBS in src/**/Makefile.am)
+
+AC_ARG_WITH(zeromq,
+   [AS_HELP_STRING([--with-zeromq], [Enable zeromq socket library operating much faster than TCP sockets (default=no)])], [have_zeromq=yes], [have_zeromq=no])
+AC_SUBST(have_zeromq)
+
+if test "${have_zeromq}" = "yes" ; then
+  PKG_CHECK_MODULES([ZMQ], [libzmq = 3.2.3],
+    [ MOMLIBS="$MOMLIBS $ZMQ_LIBS"; CFLAGS="$CFLAGS $ZMQ_CFLAGS" ],
+    [ AC_MSG_ERROR([ZeroMQ is enabled but can not be found by pkg-config.
+
+$ZMQ_PKG_ERRORS
+
+To solve this error ensure that libzmq.pc file is installed to pkgconfig
+directory or disable zeromq to switch the build to TCP sockets by configuring
+with --without-zeromq.
+  ])])
+  AC_DEFINE(ZMQ, 1, [use ZMQ as a transport layer])
+
+  dnl FIXME: We need for more strict check to determine the version.
+  dnl        The problem is that jsoncpp doesn't provide .pc pkgconfig file. Also it has no API call version.
+  dnl        Probably there is some fix. This check would be updated after more close investigation during moving to json.
+  AC_CHECK_LIB(jsoncpp, main,
+    [ MOMLIBS="$MOMLIBS -ljsoncpp" ],
+    [ AC_MSG_ERROR([TORQUE needs jsoncpp library if zeromq is enabled. Please install jsoncpp or configure with --without-zeromq]) ])
+fi
+
+
 dnl
 dnl ##########################################################################
 dnl Do not install load library path in /etc/ld.so.conf.d
 
 AC_ARG_WITH(loadlibfile,
-   [AS_HELP_STRING([--with-loadlibfile], [ (Enable automatic install of libtorqueue.conf entry to ld.so.conf.d (default=no)])], [have_loadlibfile=yes], [have_loadlibfile=no])
+   [AS_HELP_STRING([--with-loadlibfile], [Enable automatic install of libtorqueue.conf entry to ld.so.conf.d (default=no)])], [have_loadlibfile=yes], [have_loadlibfile=no])
 AC_SUBST(have_loadlibfile)
+
 
 dnl
 dnl  ######################################################################
