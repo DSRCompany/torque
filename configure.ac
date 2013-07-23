@@ -126,35 +126,48 @@ dnl
 dnl ##########################################################################
 dnl Use ZeroMQ if enabled
 dnl This would enable libraries linking and set ZMQ macro to use in the source code.
-dnl FIXME: Currently zeromq library would be added to linking by MOMLIBS variable
-dnl        This probably would be changed by either adding to another *LIBS pack or
-dnl        to own ZMQLIBS variable. In the second case it would be integrated to be
-dnl        linked with corresponding modules (to see how grep for MOMLIBS in src/**/Makefile.am)
 
 AC_ARG_WITH(zeromq,
-   [AS_HELP_STRING([--with-zeromq], [Enable zeromq socket library operating much faster than TCP sockets (default=no)])], [have_zeromq=yes], [have_zeromq=no])
+   [AS_HELP_STRING([--with-zeromq], [Enable and optionally specify the path to zeromq socket library operating much faster than TCP sockets (default=yes)])], [have_zeromq=${with_zeromq}], [have_zeromq=yes])
 AC_SUBST(have_zeromq)
 
-if test "${have_zeromq}" = "yes" ; then
-  PKG_CHECK_MODULES([ZMQ], [libzmq = 3.2.3],
-    [ MOMLIBS="$MOMLIBS $ZMQ_LIBS"; CFLAGS="$CFLAGS $ZMQ_CFLAGS" ],
-    [ AC_MSG_ERROR([ZeroMQ is enabled but can not be found by pkg-config.
+if test "${have_zeromq}" != "no" ; then
+  if test "${have_zeromq}" == "yes"; then
+    # ZeroMQ is enabled
+    PKG_CHECK_MODULES([ZMQ], [libzmq = 3.2.3],
+      [ TRANSPORTLIBS="$TRANSPORTLIBS $ZMQ_LIBS"; CFLAGS="$CFLAGS $ZMQ_CFLAGS" ],
+      [ AC_MSG_ERROR([ZeroMQ is enabled but can not be found by pkg-config.
 
 $ZMQ_PKG_ERRORS
 
 To solve this error ensure that libzmq.pc file is installed to pkgconfig
 directory or disable zeromq to switch the build to TCP sockets by configuring
 with --without-zeromq.
-  ])])
+    ])])
+  else
+    # ZeroMQ is enabled with non-standard path
+    AC_CHECK_LIB(zmq, main, [ TRANSPORTLIBS="$TRANSPORTLIBS -L${have_zeromq} -lzmq" ],
+      [ AC_MSG_ERROR([ZeroMQ is enabled but can not be found at the specified path.
+       
+${have_zeromq}
+
+To solve this error ensure that libzmq.so file is installed under the path passed to --with-zeromq argument.
+If the library is installed at standard path use --with-zeromq without arguments or swithc to the build with
+TCP sockets by configuring with --without-zeromq.
+      ])], "-L${have_zeromq}")
+  fi
+
   AC_DEFINE(ZMQ, 1, [use ZMQ as a transport layer])
 
   dnl FIXME: We need for more strict check to determine the version.
   dnl        The problem is that jsoncpp doesn't provide .pc pkgconfig file. Also it has no API call version.
   dnl        Probably there is some fix. This check would be updated after more close investigation during moving to json.
   AC_CHECK_LIB(jsoncpp, main,
-    [ MOMLIBS="$MOMLIBS -ljsoncpp" ],
+    [ TRANSPORTLIBS="$TRANSPORTLIBS -ljsoncpp" ],
     [ AC_MSG_ERROR([TORQUE needs jsoncpp library if zeromq is enabled. Please install jsoncpp or configure with --without-zeromq]) ])
 fi
+
+AC_SUBST(TRANSPORTLIBS)
 
 
 dnl
@@ -455,6 +468,7 @@ m4_ifdef([AM_SILENT_RULES],[
     src/resmom/test/requests/Makefile
     src/resmom/test/start_exec/Makefile
     src/resmom/test/tmsock_recov/Makefile
+    src/resmom/test/ext_lib/Makefile
     src/resmom/linux/test/Makefile
     src/resmom/linux/test/cpuset/Makefile
     src/resmom/linux/test/mom_mach/Makefile
