@@ -529,6 +529,14 @@
 #define TRQ_AUTHD_SERVICE_PORT 15005
 #endif /* TRQ_AUTHD_SERVICE_PORT */
 
+#ifdef ZMQ
+#define PBS_STATUS_SERVICE_NAME "pbs_status"
+
+#ifndef PBS_STATUS_SERVICE_PORT
+#define PBS_STATUS_SERVICE_PORT 15006
+#endif /* PBS_MANAGER_SERVICE_PORT */
+#endif /* ZMQ */
+
 /*
  * Other misc checkpoint defines
  */

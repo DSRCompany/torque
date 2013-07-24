@@ -115,6 +115,10 @@
 
 /* Global Data Items */
 
+#ifdef ZMQ
+bool   use_zmq = false; // Using of ZeroMQ have to be enabled as command-line argument.
+#endif /* ZMQ */
+
 int    MOMIsLocked = 0;
 int    MOMIsPLocked = 0;
 int    ForceServerUpdate = 0;
@@ -178,6 +182,9 @@ gid_t  pbsgroup;
 uid_t pbsuser;
 unsigned int pbs_mom_port = 0;
 unsigned int pbs_rm_port = 0;
+#ifdef ZMQ
+unsigned int pbs_status_port = 0;
+#endif /* ZMQ */
 tlist_head mom_polljobs; /* jobs that must have resource limits polled */
 tlist_head svr_newjobs; /* jobs being sent to MOM */
 tlist_head svr_alljobs; /* all jobs under MOM's control */
@@ -3659,6 +3666,10 @@ void usage(
   fprintf(stderr, "  -S <INT>  \\\\ Server Port\n");
   fprintf(stderr, "  -v        \\\\ Version\n");
   fprintf(stderr, "  -x        \\\\ Do Not Use Privileged Ports\n");
+#ifdef ZMQ
+  fprintf(stderr, "  -z        \\\\ Use ZeroMQ as a network transport layer\n");
+  fprintf(stderr, "  -Z <INT>  \\\\ Status Port\n");
+#endif /* ZMQ */
   fprintf(stderr, "  --about   \\\\ Print Build Information\n");
   fprintf(stderr, "  --help    \\\\ Print Usage\n");
   fprintf(stderr, "  --version \\\\ Version\n");
@@ -3849,6 +3860,23 @@ void initialize_globals(void)
         PBS_MANAGER_SERVICE_PORT);
     }
 
+#ifdef ZMQ
+  ptr = getenv("PBS_STATUS_SERVICE_PORT");
+
+  if (ptr != NULL)
+    {
+    pbs_status_port = (int)strtol(ptr, NULL, 10);
+    }
+
+  if (pbs_status_port <= 0)
+    {
+    pbs_status_port = get_svrport(
+        (char *)PBS_STATUS_SERVICE_NAME,
+        (char *)"tcp",
+        PBS_STATUS_SERVICE_PORT);
+    }
+#endif /* ZMQ */
+
   /* set timeout values for MOM */
 
   MaxConnectTimeout = 10000;  /* in microseconds */
@@ -3984,7 +4012,7 @@ void parse_command_line(
 
   errflg = 0;
 
-  while ((c = getopt(argc, argv, "a:A:c:C:d:DhH:l:L:mM:pPqrR:s:S:vwx-:")) != -1)
+  while ((c = getopt(argc, argv, "a:A:c:C:d:DhH:l:L:mM:pPqrR:s:S:vwxzZ:-:")) != -1)
     {
     switch (c)
       {
@@ -4235,6 +4263,28 @@ void parse_command_line(
         port_care = FALSE;
 
         break;
+
+#ifdef ZMQ
+      case 'z':
+
+        use_zmq = true;
+
+        break;
+
+      case 'Z':
+
+        pbs_status_port = (unsigned int)atoi(optarg);
+
+        if (pbs_status_port == 0)
+          {
+          fprintf(stderr, "Bad Status port value %s\n",
+                  optarg);
+
+          exit(1);
+          }
+
+        break;
+#endif /* ZMQ */
 
       case '?':
 

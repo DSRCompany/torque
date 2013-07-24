@@ -213,8 +213,12 @@ int svr_restart();
 void          restore_attr_default (struct pbs_attribute *);
 
 /* Global Data Items */
-
 int                     mom_hierarchy_retry_time = NODE_COMM_RETRY_TIME;
+
+#ifdef ZMQ
+bool   use_zmq = false; // Using of ZeroMQ have to be enabled as command-line argument.
+#endif /* ZMQ */
+
 time_t                  last_task_check_time = 0;
 int                     disable_timeout_check = FALSE;
 int                     lockfds = -1;
@@ -254,6 +258,9 @@ pbs_net_t               pbs_scheduler_addr;
 unsigned int            pbs_scheduler_port;
 extern pbs_net_t        pbs_server_addr;
 unsigned int            pbs_server_port_dis;
+#ifdef ZMQ
+unsigned int pbs_status_port = 0;
+#endif /* ZMQ */
 
 bool                    auto_send_hierarchy = true;
 mom_hierarchy_t        *mh;
@@ -589,6 +596,10 @@ int PBSShowUsage(
   fprintf(stderr, "  -S <PORT> \\\\ Scheduler Port\n");
   fprintf(stderr, "  -t <TYPE> \\\\ Startup Type (hot, warm, cold, create)\n");
   fprintf(stderr, "  -v        \\\\ Version\n");
+#ifdef ZMQ
+  fprintf(stderr, "  -z        \\\\ Use ZeroMQ as a network transport layer\n");
+  fprintf(stderr, "  -Z <INT>  \\\\ Status Port\n");
+#endif /* ZMQ */
   fprintf(stderr, "  --about   \\\\ Print information about pbs_server\n");
   fprintf(stderr, "  --ha      \\\\ High Availability MODE\n");
   fprintf(stderr, "  --help    \\\\ Print Usage\n");
@@ -645,7 +656,11 @@ void parse_command_line(
 
   ForceCreation = FALSE;
 
+<<<<<<< HEAD
   while ((c = getopt(argc, argv, "A:a:cd:DefhH:L:l:mM:np:R:S:t:uv-:")) != -1)
+=======
+  while ((c = getopt(argc, argv, "A:a:cd:DefhH:L:l:mM:p:R:S:t:uvzZ:-:")) != -1)
+>>>>>>> Add support of command line options: -z to enable ZeroMQ, -Z <port> to specify status messages port number.
     {
     switch (c)
       {
@@ -997,6 +1012,28 @@ void parse_command_line(
         exit(0);
 
         break;
+
+#ifdef ZMQ
+      case 'z':
+
+        use_zmq = true;
+
+        break;
+
+      case 'Z':
+
+        pbs_status_port = (unsigned int)atoi(optarg);
+
+        if (pbs_status_port == 0)
+          {
+          fprintf(stderr, "Bad Status port value %s\n",
+                  optarg);
+
+          exit(1);
+          }
+
+        break;
+#endif /* ZMQ */
 
       default:
 
@@ -1714,6 +1751,13 @@ void set_globals_from_environment(void)
     pbs_rm_port = (int)strtol(ptr, NULL, 10);
     }
 
+#ifdef ZMQ
+  if ((ptr = getenv("PBS_STATUS_SERVICE_PORT")) != NULL)
+    {
+    pbs_status_port = (int)strtol(ptr, NULL, 10);
+    }
+#endif /* ZMQ */
+
   if ((plogenv = getenv("PBSLOGLEVEL")) != NULL)
     {
     /* Note the plogenv is global and is tested in main_loop */
@@ -1839,6 +1883,11 @@ int main(
 
   if (pbs_rm_port <= 0)
     pbs_rm_port = get_svrport((char *)PBS_MANAGER_SERVICE_NAME, (char *)"tcp", PBS_MANAGER_SERVICE_PORT);
+
+#ifdef ZMQ
+  if (pbs_status_port <= 0)
+    pbs_status_port = get_svrport((char *)PBS_STATUS_SERVICE_NAME, (char *)"tcp", PBS_STATUS_SERVICE_PORT);
+#endif /* ZMQ */
 
   parse_command_line(argc, argv);
 
