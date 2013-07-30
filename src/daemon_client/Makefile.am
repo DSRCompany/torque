@@ -15,3 +15,4 @@ sbin_PROGRAMS = trqauthd
 
 trqauthd_SOURCES = trq_auth_daemon.c trq_main.c
 trqauthd_LDFLAGS = -L../lib/Libpbs/.libs -ltorque
+trqauthd_LDADD = $(TRANSPORTLIBS)

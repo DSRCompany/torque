@@ -165,6 +165,12 @@
 
 #define PBS_LOCAL_CONNECTION PBS_NET_MAX_CONNECTIONS
 
+#ifdef ZMQ
+#ifndef PBS_ZMQ_MAX_CONNECTIONS
+#define PBS_ZMQ_MAX_CONNECTIONS 2
+#endif
+#endif /* ZMQ */
+
 /*
  * Security, Authentication, Authorization Control:
  *

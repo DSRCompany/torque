@@ -9,7 +9,7 @@ PBS_LIBS = ../lib/Libpbs/libtorque.la
 
 sbin_PROGRAMS = momctl
 
-LDADD = $(PBS_LIBS)
+LDADD = $(PBS_LIBS) $(TRANSPORTLIBS)
 
 momctl_SOURCES = momctl.c
 

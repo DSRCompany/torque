@@ -30,7 +30,7 @@ PBS_LIBS = ../lib/Libattr/libattr.a \
 EXTRA_DIST = rm_dep.h
 sbin_PROGRAMS = pbs_mom pbs_demux
 
-LDADD = @PBS_MACH@/libmommach.a $(MOMLIBS) $(PBS_LIBS) $(ALPS_LIBS)
+LDADD = @PBS_MACH@/libmommach.a $(MOMLIBS) $(PBS_LIBS) $(ALPS_LIBS) $(TRANSPORTLIBS)
 
 pbs_mom_SOURCES = catch_child.c mom_comm.c mom_inter.c mom_main.c	\
 		   mom_server.c prolog.c requests.c start_exec.c	\
@@ -55,9 +55,11 @@ if NVIDIA
 pbs_mom_SOURCES += nvidia.c
 endif
 
+#pbs_mom_LDADD += $(TRANSPORTLIBS)
+
 pbs_demux_SOURCES = pbs_demux.c
 # use LDADD here so that we don't have to link MOM with libcr
-pbs_demux_LDADD = $(BLCR_LDFLAGS) @PBS_MACH@/libmommach.a $(MOMLIBS) $(PBS_LIBS)
+pbs_demux_LDADD = $(BLCR_LDFLAGS) @PBS_MACH@/libmommach.a $(MOMLIBS) $(PBS_LIBS) $(TRANSPORTLIBS)
 pbs_demux_CPPFLAGS = $(BLCR_CPPFLAGS) $(AM_CPPFLAGS)
 
 install-exec-hook:

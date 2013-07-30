@@ -15,16 +15,16 @@ bin_PROGRAMS = qalter qdel qhold qmove qorder qmsg qrerun qrls qselect qsig \
 EXTRA_PROGRAMS = pbspd pbspoe
 EXTRA_DIST = nqs2pbs.in sample.qstatrc
 
-LDADD = $(PBS_LIBS)
+LDADD = $(PBS_LIBS) $(TRANSPORTLIBS)
 
 if USE_TCLQSTAT
 TCLQSTATLIBS = $(MY_TCL_LIBS)
 TCLQSTATCFLAGS = $(MY_TCL_INCS)
 endif
-qstat_LDADD = $(PBS_LIBS) $(TCLQSTATLIBS)
+qstat_LDADD = $(PBS_LIBS) $(TCLQSTATLIBS) $(TRANSPORTLIBS)
 qstat_CFLAGS = $(TCLQSTATCFLAGS)
 
-qmgr_LDADD = $(PBS_LIBS) $(READLINE_LIBS)
+qmgr_LDADD = $(PBS_LIBS) $(READLINE_LIBS) $(TRANSPORTLIBS)
 
 pbspoe_CFLAGS = -DPBSPD=\"$(bindir)/pbspd\"
 qsub_CFLAGS = -DSUBMIT_FILTER_PATH=\"$(SUBMIT_FILTER_PATH)\" \

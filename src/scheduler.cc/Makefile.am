@@ -13,7 +13,7 @@ sbin_PROGRAMS = pbs_sched
 CLEANFILES = *.gcda *.gcno *.gcov
 CLEANFILES += samples/@SCHD_CODE@/*.gcda samples/@SCHD_CODE@/*.gcno samples/@SCHD_CODE@/*.gcov
 
-pbs_sched_LDADD = samples/@SCHD_CODE@/libfoo.la $(PBS_LIBS) 
+pbs_sched_LDADD = samples/@SCHD_CODE@/libfoo.la $(PBS_LIBS) $(TRANSPORTLIBS)
 AM_CFLAGS = -DPBS_SERVER_HOME=\"$(PBS_SERVER_HOME)\" -DPBS_ENVIRON=\"$(PBS_ENVIRON)\"
 
 pbs_sched_SOURCES = pbs_sched.c get_4byte.c

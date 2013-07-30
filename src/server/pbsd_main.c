@@ -103,7 +103,9 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <libxml/parser.h>
-
+#ifdef ZMQ
+#include <zmq.h>
+#endif /* ZMQ */
 #include "list_link.h"
 #include "work_task.h"
 #include "log.h"
@@ -531,6 +533,24 @@ void *start_process_pbs_server_port(
  
 
 
+#ifdef ZMQ
+
+void *start_process_pbs_status_port(
+    
+  void *new_sock)
+
+  {
+  // TODO: Implement
+  printf("Received status message\n");
+
+  /* Thread exit */
+  return(NULL);
+  }
+
+#endif /* ZMQ */
+
+
+
 void clear_listeners(void)   /* I */
 
   {
@@ -656,11 +676,7 @@ void parse_command_line(
 
   ForceCreation = FALSE;
 
-<<<<<<< HEAD
-  while ((c = getopt(argc, argv, "A:a:cd:DefhH:L:l:mM:np:R:S:t:uv-:")) != -1)
-=======
-  while ((c = getopt(argc, argv, "A:a:cd:DefhH:L:l:mM:p:R:S:t:uvzZ:-:")) != -1)
->>>>>>> Add support of command line options: -z to enable ZeroMQ, -Z <port> to specify status messages port number.
+  while ((c = getopt(argc, argv, "A:a:cd:DefhH:L:l:mM:np:R:S:t:uvzZ:-:")) != -1)
     {
     switch (c)
       {
@@ -1897,6 +1913,19 @@ int main(
     {
     return(1);
     }
+
+#ifdef ZMQ
+  if (use_zmq) {
+    /* Initialize ZeroMQ context */
+    int rc = create_zmq_context();
+    if (rc) {
+      if (LOGLEVEL > 0) {
+        log_event(PBSEVENT_ERROR, PBS_EVENTCLASS_SERVER, __func__, "Can't initialize ZeroMQ context.");
+      }
+      return(1);
+    }
+  }
+#endif /* ZMQ */
   
   if ((check_network_port(pbs_server_port_dis) != PBSE_NONE) &&
       (!high_availability_mode))
@@ -2099,6 +2128,17 @@ int main(
     exit(3);
     }
 
+#ifdef ZMQ
+  if (use_zmq && init_znetwork(pbs_status_port, start_process_pbs_status_port, ZMQ_ROUTER) != 0)
+    {
+    perror("pbs_server: ZeroMQ socket");
+
+    log_err(-1, msg_daemonname, (char *)"init_network failed ZeroMQ socket");
+
+    exit(3);
+    }
+#endif /* ZMQ */
+
   /* poll_job_task uses a mutex to protect a counter
      that prevents the number of poll job tasks from
      consuming all available threads */
@@ -2132,6 +2172,12 @@ int main(
 #ifdef ENABLE_UNIX_SOCKETS
   unlink(TSOCK_PATH);
 #endif /* END ENABLE_UNIX_SOCKETS */
+
+#ifdef ZMQ
+  if (use_zmq) {
+    destroy_zmq_context();
+  }
+#endif /* ZMQ */
 
   log_event(
     PBSEVENT_SYSTEM | PBSEVENT_FORCE,

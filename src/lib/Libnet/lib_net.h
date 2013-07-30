@@ -103,3 +103,8 @@ int x11_connect_display(char *display, long alsounused, char *EMsg);
 
 char * netaddr_long(long ap, char *out);
 char * netaddr(struct sockaddr_in *ap);
+
+#ifdef ZMQ
+int create_zmq_context();
+void destroy_zmq_context();
+#endif /* ZMQ */
