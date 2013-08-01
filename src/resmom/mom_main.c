@@ -46,7 +46,9 @@
 #include <sys/utsname.h>
 #include <dirent.h>
 #include <libxml/parser.h>
-
+#ifdef ZMQ
+#include <zmq.h>
+#endif /* ZMQ */
 
 #include "libpbs.h"
 #include "pbs_ifl.h"
@@ -3246,6 +3248,103 @@ void *tcp_request(
 
 
 
+#ifdef ZMQ
+
+void *status_request(
+
+  void *args)
+
+  {
+  void *zsock = *(void **)args;
+
+  // By 0MQ design the message would consist at least of 2 parts:
+  // 1. sender ID
+  // 2. first part of the message data
+  // By our design messages would consist of the only 2 these parts.
+  zmq_msg_t part;
+  bool close_msg = false;
+  for (int i = 0; i < 2; i++)
+    {
+    int rc = 0;
+
+    if ((rc = zmq_msg_init(&part)) != 0)
+      {
+      log_err(errno, __func__, "can't init recv message");
+      break;
+      }
+    close_msg = true;
+
+    // Receive the message
+    if ((rc = zmq_msg_recv(&part, zsock, ZMQ_DONTWAIT)) == -1)
+      {
+      // errno = EAGAIN means there is no message to receive
+      if (errno != EAGAIN)
+        {
+        log_err(errno, __func__, "can't recv message");
+        }
+      break;
+      }
+
+    // Check if there are more part(s)
+    int64_t more;
+    size_t more_size = sizeof more;
+    rc = zmq_getsockopt(zsock, ZMQ_RCVMORE, &more, &more_size);
+    if (rc != 0)
+      {
+      log_err(errno, __func__, "can't get socket option");
+      break;
+      }
+
+    if (i == 0 && !more)
+      {
+      // We expect data block after the ID
+      log_err(-1, __func__, "multipart data expected");
+      break;
+      }
+    if (i > 0 && more)
+      {
+      // We don't expect multipart message data
+      log_err(-1, __func__, "unexpected multipart data");
+      // TODO: Investigate how to drop the unexpected message tail here.
+      break;
+      }
+
+    // Get message data
+    size_t sz = zmq_msg_size(&part);
+    void *data = zmq_msg_data(&part);
+    if (!data)
+      {
+      log_err(errno, __func__, "can't get message data");
+      break;
+      }
+
+    // Got well formed message without errors.
+    // Process the message
+    if (i == 0)
+      {
+      printf("ZMQ Message Sender ID: %.*s\n", (int)sz, (char *)data);
+      }
+    else
+      {
+      printf("ZMQ Message Data: %.*s\n", (int)sz, (char *)data);
+      }
+
+    close_msg = false;
+    zmq_msg_close(&part);
+    }
+  // Cleanup after break
+  if (close_msg)
+    {
+    zmq_msg_close(&part);
+    }
+
+  return(NULL);
+  }  /* END status_request() */
+
+#endif /* ZMQ */
+
+
+
 const char *find_signal_name(
 
   int sig)
@@ -4704,6 +4803,19 @@ int setup_program_environment(void)
 
   /* initialize the network interface */
 
+#ifdef ZMQ
+  if (use_zmq) {
+    /* Initialize ZeroMQ context */
+    int rc = create_zmq_context();
+    if (rc) {
+      if (LOGLEVEL > 0) {
+        log_event(PBSEVENT_ERROR, PBS_EVENTCLASS_SERVER, __func__, "Can't initialize ZeroMQ context.");
+      }
+      return(1);
+    }
+  }
+#endif /* ZMQ */
+
   if (init_network(pbs_mom_port, mom_process_request) != 0)
     {
     c = errno;
@@ -4753,6 +4865,24 @@ int setup_program_environment(void)
 
     exit(1);
     }
+
+#ifdef ZMQ
+
+  if (use_zmq)
+    {
+    char endpoint[32];
+    sprintf(endpoint, "tcp://*:%d", pbs_status_port);
+    if (init_znetwork(endpoint, status_request, ZMQ_DEALER) != 0)
+      {
+      perror("pbs_server: ZeroMQ socket");
+
+      log_err(-1, msg_daemonname, (char *)"init_network failed ZeroMQ socket");
+
+      return(3);
+      }
+    }
+
+#endif /* ZMQ */
 
 #ifdef PENABLE_LINUX26_CPUSETS
   /* load system topology */
@@ -6074,6 +6204,13 @@ void main_loop(void)
       log_err(-1, msg_daemonname, "wait_request failed");
       }
 
+#ifdef ZMQ
+    if (use_zmq && wait_zrequest() != 0)
+      {
+      log_err(-1, msg_daemonname, "wait_zrequest failed");
+      }
+#endif /* ZMQ */
+
     /* block signals while we do things */
 
     if (sigprocmask(SIG_BLOCK, &allsigs, NULL) == -1)
@@ -6524,6 +6661,12 @@ int main(
 #endif  /* NVIDIA_GPUS and NVML_API */
 
   mom_close_poll();
+
+#ifdef ZMQ
+  if (use_zmq) {
+    destroy_zmq_context();
+  }
+#endif /* ZMQ */
 
   net_close(-1);  /* close all network connections */
 

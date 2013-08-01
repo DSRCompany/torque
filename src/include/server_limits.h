@@ -167,7 +167,7 @@
 
 #ifdef ZMQ
 #ifndef PBS_ZMQ_MAX_CONNECTIONS
-#define PBS_ZMQ_MAX_CONNECTIONS 2
+#define PBS_ZMQ_MAX_CONNECTIONS 1
 #endif
 #endif /* ZMQ */
 

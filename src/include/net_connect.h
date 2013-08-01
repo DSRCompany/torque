@@ -200,7 +200,7 @@ extern "C"
 int add_conn(int, enum conn_type, pbs_net_t, unsigned int, unsigned int, void *(*func)(void *));
 int add_scheduler_conn(int, enum conn_type, pbs_net_t, unsigned int, unsigned int, void *(*func)(void *));
 #ifdef ZMQ
-int add_zconn(void *, enum conn_type, pbs_net_t, unsigned int, unsigned int, void *(*func)(void *));
+int add_zconn(void *, void *(*func)(void *));
 #endif /* ZMQ */
 int  client_to_svr(pbs_net_t, unsigned int, int, char *);
 void close_conn(int,int);
@@ -211,15 +211,16 @@ pbs_net_t get_hostaddr(int *, char *);
 int  get_fullhostname(char *, char *, int, char *);
 unsigned int  get_svrport(char *, char *, unsigned int);
 int  init_network(unsigned int, void *(*readfunc)(void *));
-#ifdef ZMQ
-int  init_znetwork(unsigned int, void *(*readfunc)(void *), int socket_type);
-#endif /* ZMQ */
 void net_close(int);
 int  wait_request(time_t waittime, long *);
 void net_add_close_func(int, void(*func)(int));
 int get_max_num_descriptors(void);
 int get_fdset_size(void);
 char * netaddr_pbs_net_t(pbs_net_t);
+#ifdef ZMQ
+int init_znetwork(char *, void *(*readfunc)(void *), int);
+int wait_zrequest();
+#endif /* ZMQ */
 #ifdef __cplusplus
 }
 #endif
@@ -245,17 +246,9 @@ struct connection
 #ifdef ZMQ
 struct zconnection
   {
-  pbs_net_t cn_addr; /* internet address of client */
   void *cn_socket; /* handle for API, see svr_connect() */
-  unsigned int cn_port; /* internet port number of client */
   unsigned short cn_authen; /* authentication flags */
-  unsigned short cn_socktype; /* authentication flags */
-  enum conn_type cn_active;     /* idle or type if active */
-  time_t cn_lasttime;    /* time last active */
   void *(*cn_func)(void *);  /* read function when data rdy */
-  void (*cn_oncl)(int);  /* func to call on close */
-  pthread_mutex_t *cn_mutex;
-  int cn_stay_open; /* Set to TRUE when the connection needs to remain open */
   };
 #endif /* ZMQ */
 

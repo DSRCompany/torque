@@ -2129,13 +2129,18 @@ int main(
     }
 
 #ifdef ZMQ
-  if (use_zmq && init_znetwork(pbs_status_port, start_process_pbs_status_port, ZMQ_ROUTER) != 0)
+  if (use_zmq)
     {
-    perror("pbs_server: ZeroMQ socket");
+    char endpoint[32];
+    sprintf(endpoint, "tcp://*:%d", pbs_status_port);
+    if (init_znetwork(endpoint, start_process_pbs_status_port, ZMQ_ROUTER) != 0)
+      {
+      perror("pbs_server: ZeroMQ socket");
 
-    log_err(-1, msg_daemonname, (char *)"init_network failed ZeroMQ socket");
+      log_err(-1, msg_daemonname, (char *)"init_network failed ZeroMQ socket");
 
-    exit(3);
+      exit(3);
+      }
     }
 #endif /* ZMQ */
 

@@ -137,10 +137,6 @@ extern char local_host_name[];
 
 void initialize_connections_table();
 
-#ifdef ZMQ
-void initialize_zconnections_table();
-#endif /* ZMQ */
-
 /*extern time_t time(time_t *);*/
 struct in_addr   net_serveraddr;
 char            *net_server_name = NULL;
@@ -188,10 +184,6 @@ pbs_net_t        pbs_server_addr;
 /* Private function within this file */
 
 void *accept_conn(void *);
-
-#ifdef ZMQ
-void *accept_zconn(void *);
-#endif /* ZMQ */
 
 static struct netcounter nc_list[60];
 
@@ -510,6 +502,7 @@ int create_zmq_context()
   }
 
 
+
 void destroy_zmq_context()
   {
   const int LINGER = 0;
@@ -537,81 +530,34 @@ void destroy_zmq_context()
 
 int init_znetwork(
 
-    unsigned int  port,
-    void         *(*readfunc)(void *),
-    int           socket_type)
+    char   *endpoint,
+    void *(*readfunc)(void *),
+    int     socket_type)
 
   {
-  static int  initialized = 0;
-
   void *socket;
-  // TODO: make the size constant
-  char endpoint[16];
   int  rc;
-  pthread_mutexattr_t t_attr;
-  unsigned int socktype;
 
-  pthread_mutexattr_init(&t_attr);
-  pthread_mutexattr_settype(&t_attr, PTHREAD_MUTEX_ERRORCHECK);
-
-  if (initialized == 0)
-    {
-    initialize_zconnections_table();
-    }
-
-  // TODO: support unix sockets if port == 0
   if (!zmq_context || !readfunc)
     {
+    log_err(-1, __func__, "wrong arguments specified");
     return(-1);
     }
 
-  if (port)
+  socket = zmq_socket(zmq_context, socket_type);
+  if (!socket) {
+    log_err(errno, __func__, "unable to create a socket");
+    return(-1);
+  }
+
+  rc = zmq_bind(socket, endpoint);
+  if (!rc)
     {
-    socktype = PBS_SOCK_INET;
-    socket = zmq_socket(zmq_context, socket_type);
-    if (!socket) {
-      // TODO: log error
-      return(-1);
+    log_err(errno, __func__, "unable to bind to the socket");
+    return(-1);
     }
 
-    sprintf(endpoint, "tcp://*:%hd", (unsigned short)port);
-    rc = zmq_bind(socket, endpoint);
-    if (!rc)
-      {
-      // TODO: log error
-      return(-1);
-      }
-    }
-  else
-    {
-#ifdef ENABLE_UNIX_SOCKETS
-    /* setup unix domain socket */
-    socktype = PBS_SOCK_UNIX;
-    socket = zmq_socket(zmq_context, socket_type);
-    if (!socket)
-      {
-      // TODO: log error
-      return(-1);
-      }
-
-    sprintf(endpoint, "ipc://%s", TSOCK_PATH);
-    rc = zmq_bind(socket, endpoint);
-    if (!rc)
-      {
-      // TODO: log error
-      return(-1);
-      }
-#else
-    return -1;
-#endif
-    }
-
-  num_connections_mutex = (pthread_mutex_t *)calloc(1, sizeof(pthread_mutex_t));
-  pthread_mutex_init(num_connections_mutex, &t_attr);
-
-  zread_func[initialized++] = readfunc;
-
-  add_zconn(socket, Idle, (pbs_net_t)0, 0, socktype, accept_zconn);
+  add_zconn(socket, readfunc);
 
   return(PBSE_NONE);
   }
@@ -909,6 +855,48 @@ int wait_request(
 
 
 
+#ifdef ZMQ
+
+/*
+ * wait_zrequest - read requests from ZMQ sockets.
+ */
+
+int wait_zrequest()
+
+  {
+  zmq_pollitem_t items[1];
+
+  items[0].socket = svr_zconn[0].cn_socket;
+  items[0].events = ZMQ_POLLIN;
+  int rc = zmq_poll (items, 1, 0);
+
+  if (rc == -1)
+    {
+    log_err(errno, __func__, "Unable to poll in ZeroMQ sockets");
+    return(-1);
+    }
+  if (rc == 0)
+    {
+    return(PBSE_NONE);
+    }
+
+  /* Some events occured on the listening sockets. */
+  if (items[0].revents & ZMQ_POLLIN)
+    {
+    void *(*func)(void *) = svr_zconn[0].cn_func;
+    if (func != NULL)
+      {
+      void *args[1];
+      args[0] = svr_zconn[0].cn_socket;
+      func((void *)args);
+      }
+    }
+
+  return(PBSE_NONE);
+  }  /* END wait_zrequest() */
+
+#endif /* ZMQ */
+
 
 
 /*
@@ -987,32 +975,6 @@ void *accept_conn(
 
   return(NULL);
   }  /* END accept_conn() */
-
-
-
-#ifdef ZMQ
-
-/*
- * accept_zconn - accept request for new ZeroMQ connection
- * this routine is normally associated with the main socket,
- * requests for connection on the socket are accepted and
- * the new socket is added to the select set and the connection
- * structure - the processing routine is set to the external
- * function: process_request(socket)
- *
- * NOTE: accept conn is called by functions that have a mutex on the socket already 
- */
-
-void *accept_zconn(
-
-  void *new_conn)  /* main socket with connection request pending */
-
-  {
-  // TODO: implement
-  return(NULL);
-  }  /* END accept_zconn() */
-
-#endif /* ZMQ */
 
 
 
@@ -1169,6 +1131,32 @@ int add_conn(
 
 #ifdef ZMQ
 
+unsigned int get_zsock_port(void *zsock) {
+  size_t length = 256;
+  char endpoint[256];
+
+  // Get the socket endpoint
+  int rc = zmq_getsockopt(zsock, ZMQ_LAST_ENDPOINT, endpoint, &length);
+  if (rc == -1) {
+    return 0;
+  }
+  // Parse the endpoint (<proto>://<addr>:<port>)
+  // Lookup for the second colon
+  char *port = strchr(endpoint, ':');
+  if (port)
+    {
+    port = strchr(endpoint, ':');
+    }
+  // Not found or points to the last byte or out of the array.
+  if (!port || port >= endpoint + length - 1)
+    {
+    return 0;
+    }
+  port++;
+
+  return (unsigned int) atol(port);
+}
+
 /*
  * add_zconnection - add a connection to the svr_zconn array.
  * The params addr and port are in host order.
@@ -1178,58 +1166,16 @@ int add_conn(
 
 int add_zconnection(
 
-  void          *socket,  /* ZMQ socket connection */
-  enum conn_type type,    /* type of connection */
-  pbs_net_t      addr,    /* IP address of connected host */
-  unsigned int   port,    /* port number (host order) on connected host */
-  unsigned int   socktype, /* inet or unix */
-  void *(*func)(void *),  /* function to invoke on data rdy to read */
-  bool           add_wait_request) /* True to add into global select set */
+  void   *socket,        /* ZMQ socket connection */
+  void *(*func)(void *)) /* function to invoke on data rdy to read */
 
   {
-  int i;
+  svr_zconn[num_zconnections].cn_socket = socket;
+  svr_zconn[num_zconnections].cn_func   = func;
+  unsigned int port = get_zsock_port(socket);
+  svr_zconn[num_zconnections].cn_authen = (port > 0 && port < IPPORT_RESERVED) ? PBS_NET_CONN_FROM_PRIVIL : 0;
 
-  if (num_zconnections_mutex == NULL)
-    {
-    usleep(100000);
-    /* To solve a race condition where there are jobs in the queue, but the network hasn't been initialized yet. */
-    return PBSE_SOCKET_FAULT;
-    }
-  pthread_mutex_lock(num_zconnections_mutex);
-  if (num_zconnections >= PBS_ZMQ_MAX_CONNECTIONS) {
-    // TODO: Return special error code?
-    pthread_mutex_unlock(num_zconnections_mutex);
-    return -1;
-  }
-  i = num_zconnections;
   num_zconnections++;
-  pthread_mutex_unlock(num_zconnections_mutex);
-
-  pthread_mutex_lock(svr_zconn[i].cn_mutex);
-
-  svr_zconn[i].cn_active   = type;
-  svr_zconn[i].cn_addr     = addr;
-  svr_zconn[i].cn_port     = (unsigned short)port;
-  svr_zconn[i].cn_lasttime = time((time_t *)0);
-  svr_zconn[i].cn_func     = func;
-  svr_zconn[i].cn_oncl     = 0;
-
-
-  if ((socktype == PBS_SOCK_INET)
-#ifndef NOPRIVPORTS
-      && (port < IPPORT_RESERVED)
-#endif /* !NOPRIVPORTS */
-      )
-    {
-    svr_zconn[i].cn_authen = PBS_NET_CONN_FROM_PRIVIL;
-    }
-  else
-    {
-    /* AF_UNIX sockets */
-    svr_zconn[i].cn_authen = 0;
-    }
-
-  pthread_mutex_unlock(svr_zconn[i].cn_mutex);
 
   return(PBSE_NONE);
   }  /* END add_zconnection() */
@@ -1248,15 +1194,11 @@ extern "C"
 #endif
 int add_zconn(
 
-  void          *sock,    /* socket associated with connection */
-  enum conn_type type,    /* type of connection */
-  pbs_net_t      addr,    /* IP address of connected host */
-  unsigned int   port,    /* port number (host order) on connected host */
-  unsigned int   socktype, /* inet or unix */
-  void *(*func)(void *))  /* function to invoke on data rdy to read */
+  void   *sock,          /* socket associated with connection */
+  void *(*func)(void *)) /* function to invoke on data rdy to read */
 
   {
-  return(add_zconnection(sock, type, addr, port, socktype, func, true));
+  return(add_zconnection(sock, func));
   }  /* END add_conn() */
 #ifdef __cplusplus
 }

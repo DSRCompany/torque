@@ -91,6 +91,10 @@ void net_close(int but);
 pbs_net_t get_connectaddr(int sock, int mutex);
 int get_connecthost(int sock, char *namebuf, int size);
 char *netaddr_pbs_net_t(pbs_net_t ipadd);
+#ifdef ZMQ
+int init_znetwork(char *, void *(*readfunc)(void *), int);
+int wait_zrequest();
+#endif /* ZMQ */
 
 /* from file net_set_clse.c */
 void net_add_close_func(int, void (*func)(int));

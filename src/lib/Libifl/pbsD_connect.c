@@ -1546,23 +1546,5 @@ void initialize_connections_table()
 
 
 
-#ifdef ZMQ
-
-void initialize_zconnections_table()
-
-  {
-  int i;
-
-  for (i = 0; i < PBS_ZMQ_MAX_CONNECTIONS; i++)
-    {
-    zconnection[i].ch_mutex = (pthread_mutex_t *)calloc(1, sizeof(pthread_mutex_t));
-    pthread_mutex_init(zconnection[i].ch_mutex, NULL);
-    }
-  } /* END initialize_zconnections_table() */
-
-#endif /* ZMQ */
-
-
-
 /* END pbsD_connect.c */
 
