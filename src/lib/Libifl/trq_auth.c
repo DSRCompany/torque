@@ -1,5 +1,4 @@
 #include "license_pbs.h" /* See here for the software license */
-#include "lib_ifl.h"
 
 #include <string>
 #include <limits.h> /* LOGIN_NAME_MAX */
@@ -14,6 +13,7 @@
 #include <pwd.h>  /* getpwuid */
 #include "csv.h"
 #include "pbs_config.h"
+#include "lib_ifl.h"
 #include "../Libnet/lib_net.h" /* get_hostaddr, socket_* */
 #include "../../include/log.h" /* log event types */
 #include "utils.h"

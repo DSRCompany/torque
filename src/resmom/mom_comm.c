@@ -8821,5 +8821,21 @@ int read_status_strings(
 
 
 
+#ifdef ZMQ
+
+/*
+ * Parse and handle mom status message from buffer.
+ */
+int mom_read_json_status(size_t sz, void *data)
+  {
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+      "Reading of status isn't implemented yet");
+  return(PBSE_NONE);
+  } /* END mom_read_json_status() */
+
+#endif /* ZMQ */
+
+
+
 /* END mom_comm.c */
 

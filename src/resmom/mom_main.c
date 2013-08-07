@@ -3262,12 +3262,17 @@ void *status_request(
   // 2. first part of the message data
   // By our design messages would consist of the only 2 these parts.
   zmq_msg_t part;
+  int msg_part_number = 0;
   bool close_msg = false;
-  for (int i = 0; i < 2; i++)
+  int more = true;
+  size_t more_size = sizeof more;
+  // Read all messages received for this time
+  while(true)
     {
     int rc = 0;
 
-    if ((rc = zmq_msg_init(&part)) != 0)
+    rc = zmq_msg_init(&part);
+    if (rc != 0)
       {
       log_err(errno, __func__, "can't init recv message");
       break;
@@ -3275,10 +3280,15 @@ void *status_request(
     close_msg = true;
 
     // Receive the message
-    if ((rc = zmq_msg_recv(&part, zsock, ZMQ_DONTWAIT)) == -1)
+    rc = zmq_msg_recv(&part, zsock, ZMQ_DONTWAIT);
+    if (rc == -1)
       {
       // errno = EAGAIN means there is no message to receive
-      if (errno != EAGAIN)
+      if (errno == EAGAIN)
+        {
+        rc = 0;
+        }
+      else
         {
         log_err(errno, __func__, "can't recv message");
         }
@@ -3286,8 +3296,6 @@ void *status_request(
       }
 
     // Check if there are more part(s)
-    int64_t more;
-    size_t more_size = sizeof more;
     rc = zmq_getsockopt(zsock, ZMQ_RCVMORE, &more, &more_size);
     if (rc != 0)
       {
@@ -3295,42 +3303,52 @@ void *status_request(
       break;
       }
 
-    if (i == 0 && !more)
+    // Process the only first two message parts that are ID and the message.
+    // Skip other parts if present
+    if (msg_part_number < 2)
       {
-      // We expect data block after the ID
-      log_err(-1, __func__, "multipart data expected");
-      break;
-      }
-    if (i > 0 && more)
-      {
-      // We don't expect multipart message data
-      log_err(-1, __func__, "unexpected multipart data");
-      // TODO: Investigate how to drop the unexpected message tail here.
-      break;
+      if (msg_part_number == 0 && !more)
+        {
+        // We expect data block after the ID
+        log_err(-1, __func__, "multipart data expected");
+        break;
+        }
+
+      // Get message data
+      size_t sz = zmq_msg_size(&part);
+      void *data = zmq_msg_data(&part);
+      if (!data)
+        {
+        log_err(errno, __func__, "can't get message data");
+        break;
+        }
+
+      // Got well formed message without errors.
+      // Process the message
+      if (msg_part_number == 0)
+        {
+        printf("ZMQ Message Sender ID: %.*s\n", (int)sz, (char *)data);
+        }
+      else
+        {
+        printf("ZMQ Message Data: %.*s\n", (int)sz, (char *)data);
+        mom_read_json_status(sz, data);
+        }
       }
 
-    // Get message data
-    size_t sz = zmq_msg_size(&part);
-    void *data = zmq_msg_data(&part);
-    if (!data)
-      {
-      log_err(errno, __func__, "can't get message data");
-      break;
-      }
+    // Deinit the message
+    close_msg = false;
+    zmq_msg_close(&part);
 
-    // Got well formed message without errors.
-    // Process the message
-    if (i == 0)
+    // Update part number
+    if (more)
       {
-      printf("ZMQ Message Sender ID: %.*s\n", (int)sz, (char *)data);
+      msg_part_number++;
       }
     else
       {
-      printf("ZMQ Message Data: %.*s\n", (int)sz, (char *)data);
+      msg_part_number = 0;
       }
-
-    close_msg = false;
-    zmq_msg_close(&part);
     }
   // Cleanup after break
   if (close_msg)
@@ -4806,7 +4824,7 @@ int setup_program_environment(void)
 #ifdef ZMQ
   if (use_zmq) {
     /* Initialize ZeroMQ context */
-    int rc = create_zmq_context();
+    int rc = init_zmq();
     if (rc) {
       if (LOGLEVEL > 0) {
         log_event(PBSEVENT_ERROR, PBS_EVENTCLASS_SERVER, __func__, "Can't initialize ZeroMQ context.");
@@ -4872,12 +4890,9 @@ int setup_program_environment(void)
     {
     char endpoint[32];
     sprintf(endpoint, "tcp://*:%d", pbs_status_port);
-    if (init_znetwork(endpoint, status_request, ZMQ_DEALER) != 0)
+    if (init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, status_request, ZMQ_DEALER) != 0)
       {
-      perror("pbs_server: ZeroMQ socket");
-
       log_err(-1, msg_daemonname, (char *)"init_network failed ZeroMQ socket");
-
       return(3);
       }
     }
@@ -5223,6 +5238,17 @@ int setup_program_environment(void)
   initialize();  /* init RM code */
 
   read_mom_hierarchy();
+
+#ifdef ZMQ
+  if (use_zmq) {
+    int rc = init_zmq_connection(ZMQ_STATUS_SEND, ZMQ_DEALER);
+    if (rc)
+      {
+      log_err(-1, msg_daemonname, "can't create ZMQ socket");
+      return(3);
+      }
+  }
+#endif /* ZMQ */
 
   /* initialize machine-dependent polling routines */
   if ((c = mom_open_poll()) != PBSE_NONE)
@@ -6072,6 +6098,7 @@ void main_loop(void)
 #ifdef USESAVEDRESOURCES
   int           check_dead = TRUE;
 #endif    /* USESAVEDRESOURCES */
+  int           rc;
 
   mom_run_state = MOM_RUN_STATE_RUNNING;  /* mom_run_state is altered by stop_me() or MOMCheckRestart() */
 
@@ -6191,7 +6218,20 @@ void main_loop(void)
 
     /* wait_request does a select and then calls the connection's cn_func for sockets with data */
 
-    if (wait_request(tmpTime, NULL) != 0)
+#ifdef ZMQ
+    if (use_zmq)
+      {
+      // Use ZMQ poll instead of select()
+      rc = wait_zrequest(tmpTime, NULL);
+      }
+    else
+      {
+#endif /* ZMQ */
+      rc = wait_request(tmpTime, NULL);
+#ifdef ZMQ
+      }
+#endif /* ZMQ */
+    if (rc != 0)
       {
       if (errno == EBADF)
         {
@@ -6203,13 +6243,6 @@ void main_loop(void)
 
       log_err(-1, msg_daemonname, "wait_request failed");
       }
-
-#ifdef ZMQ
-    if (use_zmq && wait_zrequest() != 0)
-      {
-      log_err(-1, msg_daemonname, "wait_zrequest failed");
-      }
-#endif /* ZMQ */
 
     /* block signals while we do things */
 
@@ -6664,7 +6697,7 @@ int main(
 
 #ifdef ZMQ
   if (use_zmq) {
-    destroy_zmq_context();
+    deinit_zmq();
   }
 #endif /* ZMQ */
 

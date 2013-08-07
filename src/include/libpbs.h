@@ -167,20 +167,6 @@ struct connect_handle
 
 extern struct connect_handle connection[];
 
-#ifdef ZMQ
-struct zconnect_handle
-  {
-  int   ch_inuse; /* 1 if in use, 0 otherwise  */
-  void *ch_socket; /* file descriptor for the open socket */
-  void *ch_stream;
-  int   ch_errno; /* last error on this connection */
-  char *ch_errtxt; /* pointer to last server error text */
-  pthread_mutex_t *ch_mutex;
-  };
-
-extern struct zconnect_handle zconnection[];
-#endif /* ZMQ */
-
 /* PBS Batch Reply Structure     */
 /* structures that make up the reply union */
 

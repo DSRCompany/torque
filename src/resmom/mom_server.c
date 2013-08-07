@@ -213,6 +213,10 @@
 #if defined(NTOHL_NEEDS_ARPA_INET_H) && defined(HAVE_ARPA_INET_H)
 #include <arpa/inet.h>
 #endif
+#ifdef ZMQ
+#include <arpa/inet.h>
+#include <zmq.h>
+#endif /* ZMQ */
 
 #include "pbs_ifl.h"
 #include "pbs_error.h"
@@ -307,6 +311,10 @@ extern void send_update_soon();
 #ifdef NVIDIA_GPUS
 extern int  use_nvidia_gpu;
 #endif
+
+#ifdef ZMQ
+extern bool use_zmq;
+#endif /* ZMQ */
 
 void check_state(int);
 void state_to_server(int, int);
@@ -1367,6 +1375,48 @@ int write_status_strings(
 
 
 
+#ifdef ZMQ
+
+void str_free(void *data, void *hint)
+  {
+  free(data);
+  }
+
+
+
+int zmq_send_status(
+ 
+  char *stat_str)
+ 
+  {
+  int rc;
+#if 0
+  char *msg_data;
+  char          *cp;
+  received_node *rn;
+
+  // TODO: Prepare the message consisting of
+  // 1. stat_str - This node status
+  json_prepare_status(stat_str);
+  // 2. other nodes
+  while ((rn = (received_node *)next_thing(received_statuses, &iter)) != NULL)
+    {
+    cp = rn->statuses->str;
+    json_prepare_status(cp);
+    }
+
+  zmq_msg_t message;
+  zmq_msg_init_data (&message, msg_data, strlen(msg_data), str_free, NULL);
+
+  rc = zmq_sendmsg (zsocket, &message, 0);
+#else
+  rc = 0;
+#endif
+  return(rc);
+  } /* END zmq_send_status() */
+
+#endif /* ZMQ */
+
 
 
 /* send_update() 
@@ -1458,36 +1508,36 @@ void mom_server_all_update_stat(void)
     log_record(PBSEVENT_SYSTEM, 0, __func__, "composing status update for server");
     }
 
-  /* It is possible that pbs_server may get busy and start queing incoming requests and not be able 
-     to process them right away. If pbs_mom is waiting for a reply to a statuys update that has 
-     been queued and at the same time the server makes a request to the mom we can get stuck
-     in a pseudo live-lock state. That is the server is waiting for a response from the mom and
-     the mom is waiting for a response from the server. neither of which will come until a request times out.
-     If we fork the status updates this alleviates the problem by making one less request from the
-     mom single threaded */
-  pid = fork();
-
-  if (pid < 0)
+#ifdef ZMQ
+  // Status sending with ZeroMQ is non-blocking asynchronous operation. We don't need to fork here
+  // if using ZeroMQ.
+  if (!use_zmq)
     {
-    log_record(PBSEVENT_SYSTEM, 0, __func__, "Failed to fork stat update process");
-    return;
-    }
+#endif /* ZMQ */
 
-  if (pid > 0)
-    {
-    /* We are the parent clear out the status cache. */
-    int iter = -1;
-    received_node *rn = NULL;
+    /* It is possible that pbs_server may get busy and start queing incoming requests and not be able 
+       to process them right away. If pbs_mom is waiting for a reply to a statuys update that has 
+       been queued and at the same time the server makes a request to the mom we can get stuck
+       in a pseudo live-lock state. That is the server is waiting for a response from the mom and
+       the mom is waiting for a response from the server. neither of which will come until a request times out.
+       If we fork the status updates this alleviates the problem by making one less request from the
+       mom single threaded */
+    pid = fork();
 
-    LastServerUpdateTime = time_now;
+    if (pid < 0)
+      {
+      log_record(PBSEVENT_SYSTEM, 0, __func__, "Failed to fork stat update process");
+      return;
+      }
 
-    while ((rn = (received_node *)next_thing(received_statuses, &iter)) != NULL)
+    if (pid > 0)
       {
       rn->statuses.clear();
       }
 
-    return;
+#ifdef ZMQ
     }
+#endif /* ZMQ */
  
 #ifdef NUMA_SUPPORT
   for (numa_index = 0; numa_index < num_node_boards; numa_index++)
@@ -1512,43 +1562,53 @@ void mom_server_all_update_stat(void)
     else
       generate_alps_status(mom_status, apbasil_path, apbasil_protocol);
  
-    if ((nc = update_current_path(mh)) != NULL)
+#ifdef ZMQ
+    if (!use_zmq)
       {
-      /* write to the socket */
-      while (nc != NULL)
+#endif /* ZMQ */
+      if ((nc = update_current_path(mh)) != NULL)
         {
         if (write_status_strings(mom_status, nc) < 0)
           {
-          nc->bad = TRUE;
-          nc->mtime = time_now;
-          nc = force_path_update(mh);
-          }
-        else 
-          {
-          LastServerUpdateTime = time_now;
-          UpdateFailCount = 0;
+          if (write_status_strings(mom_status->str, nc) < 0)
+            {
+            nc->bad = TRUE;
+            nc->mtime = time_now;
+            nc = force_path_update(mh);
+            }
+          else 
+            {
+            LastServerUpdateTime = time_now;
+            UpdateFailCount = 0;
 
-          break;
+            break;
+            }
           }
         }
-      }
-    
-    if (nc == NULL)
-      {
-      /* now, once we contact one server we stop attempting to report in */
-      for (sindex = 0; sindex < PBS_MAXSERVER && rc != PBSE_NONE; sindex++)
+
+      if (nc == NULL)
         {
-        int tmp_rc = mom_server_update_stat(&mom_servers[sindex], mom_status);
+        /* now, once we contact one server we stop attempting to report in */
+        for (sindex = 0; sindex < PBS_MAXSERVER && rc != PBSE_NONE; sindex++)
+          {
+          int tmp_rc = mom_server_update_stat(&mom_servers[sindex], mom_status->str);
 
-        if (tmp_rc != NO_SERVER_CONFIGURED)
-          rc = tmp_rc;
+          if (tmp_rc != NO_SERVER_CONFIGURED)
+            rc = tmp_rc;
+          }
+
+        if (rc == COULD_NOT_CONTACT_SERVER)
+          log_err(-1, __func__, "Could not contact any of the servers to send an update");
         }
-
-      if (rc == COULD_NOT_CONTACT_SERVER)
-        log_err(-1, __func__, "Could not contact any of the servers to send an update");
+      else
+        close(nc->stream);
+#ifdef ZMQ
       }
-    else
-      close(nc->stream);
+    else /* !use_zmq */
+      {
+      zmq_send_status(mom_status->str);
+      }
+#endif /* ZMQ */
     }
  
   exit(0);
@@ -2073,6 +2133,98 @@ void sort_paths()
 
 
 
+#ifdef ZMQ
+
+/*
+ * Connect the socket with the specified id using the ip address and the port from the given
+ * sock_addr structure.
+ */
+int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr)
+  {
+// TODO: Rework this:
+// 1. We have to use different port (probably default for now)
+// 2. Move the define to appropriate header file
+#ifndef CONN_URL_LENGTH
+#define CONN_URL_LENGTH 28
+#endif
+  char conn_url_buf[CONN_URL_LENGTH]; // Max length: "tcp://123.123.123.123:12345\0" = 28
+  size_t printed_length;
+  int rc;
+  extern struct zconnection_s g_svr_zconn[];
+
+  if (sock_addr->sin_family != AF_INET)
+    {
+    log_err(-1, __func__, "can't connect to non AF_INET hosts");
+    return(-1);
+    }
+
+  printed_length = snprintf(conn_url_buf, CONN_URL_LENGTH,
+      "tcp://%s:%u", inet_ntoa(sock_addr->sin_addr), sock_addr->sin_port);
+  assert(printed_length < CONN_URL_LENGTH);
+
+  rc = zmq_connect(g_svr_zconn[id].socket, conn_url_buf);
+  if (rc)
+    {
+    sprintf(log_buffer, "can't connect to the server %s", conn_url_buf);
+    log_err(errno, __func__, log_buffer);
+    }
+
+  return(rc);
+  }
+
+
+
+/*
+ * Reconnect MOM status sending socket. All existing connections would be closed.
+ */
+int update_status_connection()
+  {
+  int rc = PBSE_NONE;
+  node_comm_t *nc = NULL;
+  bool connected = false;
+
+  close_zmq_connection(ZMQ_STATUS_SEND);
+
+  // Try to connect to all nodes of a level.
+  nc = update_current_path(mh);
+  if (nc != NULL)
+    {
+    node_comm_t *first_node= nc;
+    do
+      {
+      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr));
+      if (!rc)
+        {
+        connected = true;
+        }
+      }
+    while (nc && nc != first_node);
+    }
+
+  // If connected to no one node try to connect to one of the servers.
+  if (connected)
+    {
+    rc = PBSE_NONE;
+    }
+  else
+    {
+    /* now, once we contact one server we stop attempting to report in */
+    for (int i = 0; i < PBS_MAXSERVER && !rc; i++)
+      {
+      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(mom_servers[i].sock_addr));
+      }
+    if (rc)
+      {
+      log_err(-1, __func__, "Could not contact any of the servers to send an update");
+      }
+    }
+
+  return rc;
+  }
+
+#endif /* ZMQ */
+
+
 
 int read_cluster_addresses(
 
@@ -2194,6 +2346,15 @@ int read_cluster_addresses(
     /* tell the mom to go ahead and send an update to pbs_server */
     first_update_time = 0;
     }
+
+  free_dynamic_string(hierarchy_file);
+
+#ifdef ZMQ
+  if (use_zmq)
+    {
+    update_status_connection();
+    }
+#endif /* ZMQ */
 
   return(PBSE_NONE);
   } /* END read_cluster_addresses() */

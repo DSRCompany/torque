@@ -91,10 +91,6 @@ void net_close(int but);
 pbs_net_t get_connectaddr(int sock, int mutex);
 int get_connecthost(int sock, char *namebuf, int size);
 char *netaddr_pbs_net_t(pbs_net_t ipadd);
-#ifdef ZMQ
-int init_znetwork(char *, void *(*readfunc)(void *), int);
-int wait_zrequest();
-#endif /* ZMQ */
 
 /* from file net_set_clse.c */
 void net_add_close_func(int, void (*func)(int));
@@ -109,6 +105,11 @@ char * netaddr_long(long ap, char *out);
 char * netaddr(struct sockaddr_in *ap);
 
 #ifdef ZMQ
-int create_zmq_context();
-void destroy_zmq_context();
+int  init_zmq();
+void deinit_zmq();
+int  init_zmq_connection(enum zmq_connection_e, int);
+int  close_zmq_connection(enum zmq_connection_e);
+int  init_znetwork(enum zmq_connection_e, char *, void *(*readfunc)(void *), int);
+int  add_zconnection(enum zmq_connection_e, void *, void *(*func)(void *), bool);
+int  wait_zrequest(time_t waittime, long *);
 #endif /* ZMQ */

@@ -191,6 +191,21 @@ enum conn_type
   Idle
   };
 
+#ifdef ZMQ
+
+/*
+ * Enum containing ZeroMQ sockets names that are used as array indexes for g_svr_zconn array
+ * containing all ZeroMQ connections.
+ */
+enum zmq_connection_e
+  {
+  ZMQ_STATUS_RECEIVE = 0,
+  ZMQ_STATUS_SEND,
+  ZMQ_CONNECTION_COUNT
+  };
+
+#endif /* ZMQ */
+
 /* functions available in libnet.a */
 
 #ifdef __cplusplus
@@ -199,9 +214,6 @@ extern "C"
 #endif
 int add_conn(int, enum conn_type, pbs_net_t, unsigned int, unsigned int, void *(*func)(void *));
 int add_scheduler_conn(int, enum conn_type, pbs_net_t, unsigned int, unsigned int, void *(*func)(void *));
-#ifdef ZMQ
-int add_zconn(void *, void *(*func)(void *));
-#endif /* ZMQ */
 int  client_to_svr(pbs_net_t, unsigned int, int, char *);
 void close_conn(int,int);
 pbs_net_t get_connectaddr(int,int);
@@ -218,8 +230,9 @@ int get_max_num_descriptors(void);
 int get_fdset_size(void);
 char * netaddr_pbs_net_t(pbs_net_t);
 #ifdef ZMQ
-int init_znetwork(char *, void *(*readfunc)(void *), int);
-int wait_zrequest();
+int add_zconnection(enum zmq_connection_e, void *, void *(*func)(void *), bool);
+int init_znetwork(enum zmq_connection_e, char *, void *(*readfunc)(void *), int);
+int wait_zrequest(time_t waittime, long *);
 #endif /* ZMQ */
 #ifdef __cplusplus
 }
@@ -244,12 +257,18 @@ struct connection
   };
 
 #ifdef ZMQ
-struct zconnection
+
+/*
+ * Structure containing data needed to handle ZeroMQ in/out sockets connections.
+ */
+struct zconnection_s
   {
-  void *cn_socket; /* handle for API, see svr_connect() */
-  unsigned short cn_authen; /* authentication flags */
-  void *(*cn_func)(void *);  /* read function when data rdy */
+  void *socket;          /* pointer to a ZeroMQ socket */
+  unsigned short authen; /* authentication flags */
+  void *(*func)(void *); /* read function when data rdy */
+  bool should_poll;      /* add this socket to be polled if true */
   };
+
 #endif /* ZMQ */
 
 struct netcounter

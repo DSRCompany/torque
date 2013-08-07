@@ -112,6 +112,7 @@
 
 #ifdef ZMQ
 #include <zmq.h>
+#include <assert.h>
 #endif /* ZMQ */
 
 
@@ -152,8 +153,23 @@ char             pbs_server_name[PBS_MAXSERVERNAME + 1];
 struct connection svr_conn[PBS_NET_MAX_CONNECTIONS];
 
 #ifdef ZMQ
-void  *zmq_context = NULL;
-struct zconnection svr_zconn[PBS_ZMQ_MAX_CONNECTIONS];
+
+/*
+ * ZeroMQ related data structures
+ */
+
+/* Pointer to ZeroMQ context */
+void  *g_zmq_context = NULL;
+
+/* Table containing all ZeroMQ connections */
+struct zconnection_s g_svr_zconn[ZMQ_CONNECTION_COUNT];
+
+/* Pointer to the array containing items to be polled */
+static zmq_pollitem_t *gs_zmq_poll_list = NULL;
+
+/* Poll array size */
+static int             gs_zmq_poll_size = 0;
+
 #endif /* ZMQ */
 
 /*
@@ -169,13 +185,6 @@ static u_long   *GlobalSocketPortSet = NULL;
 pthread_mutex_t *global_sock_read_mutex = NULL;
 
 void *(*read_func[2])(void *);
-
-#ifdef ZMQ
-static int       num_zconnections = 0;
-pthread_mutex_t *num_zconnections_mutex = NULL;
-
-void *(*zread_func[2])(void *);
-#endif /* ZMQ */
 
 pthread_mutex_t *nc_list_mutex  = NULL;
 
@@ -495,56 +504,100 @@ int init_network(
 
 #ifdef ZMQ
 
-int create_zmq_context()
+/*
+ * Deinitialize ZeroMQ socket.
+ * The socket haven't be used after this call.
+ */
+int deinit_zmq_socket(void *socket)
   {
-  zmq_context = zmq_ctx_new();
-  return zmq_context ? 0 : -1;
+  const int LINGER = 0;
+  int rc;
+  rc = zmq_setsockopt(socket, ZMQ_LINGER, &LINGER, sizeof(LINGER)); // Set LINGER option to zero
+  if (rc)
+    {
+    log_err(errno, __func__, "can't set LINGER option to ZMQ socket");
+    }
+  rc = zmq_close(socket);
+  if (rc)
+    {
+    log_err(errno, __func__, "can't close ZMQ socket");
+    }
+  return rc;
   }
 
 
 
-void destroy_zmq_context()
+/*
+ * Initialize ZeroMQ related global data structures
+ */
+int init_zmq()
   {
-  const int LINGER = 0;
+  // Allocate the poll array of the max allowed size. This could be optimized in the future.
+  gs_zmq_poll_list = (zmq_pollitem_t *)calloc(get_max_num_descriptors(), sizeof(zmq_pollitem_t));
+  // We'll only perform ZMQ_POLLIN poll requests on the list items so init the events here.
+  for (int i = 0; i < get_max_num_descriptors(); i++) {
+    gs_zmq_poll_list[i].events = ZMQ_POLLIN;
+  }
+
+  g_zmq_context = zmq_ctx_new();
+
+  return g_zmq_context ? 0 : -1;
+  }
+
+
+
+/*
+ * Deinitialize ZeroMQ related global data structures
+ */
+void deinit_zmq()
+  {
   void *socket = NULL;
   int i;
 
-  for (i = 0; i < PBS_ZMQ_MAX_CONNECTIONS; i++)
+  // Close all sockets
+  for (i = 0; i < ZMQ_CONNECTION_COUNT; i++)
     {
-    socket = svr_zconn[i].cn_socket;
+    socket = g_svr_zconn[i].socket;
     if (!socket) {
       continue;
     }
 
-    zmq_setsockopt(socket, ZMQ_LINGER, &LINGER, sizeof(LINGER)); // Set LINGER parameter to zero
-    zmq_close(socket);
+    deinit_zmq_socket(socket);
     }
-  zmq_ctx_destroy(zmq_context);
+
+  // Destroy ZMQ context
+  zmq_ctx_destroy(g_zmq_context);
+
+  // Dealloc global data structures
+  free(gs_zmq_poll_list);
   }
 
 
 
 /**
- * init_znetwork
+ * Create ZeroMQ listening (server side) socket of the spcified socket_type.
+ * Bind the socket to the specified endpoint.
+ * Place the socket and the specified readfunc to the global ZeroMQ connections list.
+ * Socket id is the connection index in the array.
  */
-
 int init_znetwork(
 
-    char   *endpoint,
-    void *(*readfunc)(void *),
-    int     socket_type)
+    enum zmq_connection_e id,  /* Connection id (array index) */
+    char *endpoint,            /* Connection URL */
+    void *(*readfunc)(void *), /* Function to invoke on data rdy to read */
+    int  socket_type)          /* ZMQ connection type */
 
   {
   void *socket;
   int  rc;
 
-  if (!zmq_context || !readfunc)
+  if (!g_zmq_context || !readfunc)
     {
     log_err(-1, __func__, "wrong arguments specified");
     return(-1);
     }
 
-  socket = zmq_socket(zmq_context, socket_type);
+  socket = zmq_socket(g_zmq_context, socket_type);
   if (!socket) {
     log_err(errno, __func__, "unable to create a socket");
     return(-1);
@@ -557,9 +610,83 @@ int init_znetwork(
     return(-1);
     }
 
-  add_zconn(socket, readfunc);
+  add_zconnection(id, socket, readfunc, true);
 
   return(PBSE_NONE);
+  }
+
+
+
+/*
+ * Create ZeroMQ client side socket of the specified socket_type and place it to the global
+ * connections array.
+ * Socket id is the connection index in the array.
+ */
+int init_zmq_connection(
+    enum zmq_connection_e id,
+    int  socket_type)
+
+  {
+  if (!g_zmq_context)
+    {
+    log_err(-1, __func__, "zmq context isn't initialized");
+    return -1;
+    }
+
+  void *socket = zmq_socket(g_zmq_context, socket_type);
+
+  if (!socket)
+    {
+    log_err(errno, __func__, "unable to create a socket");
+    return -1;
+    }
+
+  add_zconnection(id, socket, NULL, false);
+
+  return 0;
+  }
+
+
+
+/*
+ * Closes all active connections on the socket with the given id.
+ * The socket wouldn't be connected to any endpoint but would still be initialized.
+ */
+int close_zmq_connection(
+    enum zmq_connection_e id)
+  {
+  int rc;
+  void *socket = g_svr_zconn[id].socket;
+  int socket_type;
+  size_t socket_type_length = sizeof(socket_type);
+
+  if (!socket)
+    {
+    log_err(-1, __func__, "specified socket ID wasn't previously initialized");
+    return -1;
+    }
+
+  rc = zmq_getsockopt(socket, ZMQ_TYPE, &socket_type, &socket_type_length);
+  if (rc)
+    {
+    log_err(rc, __func__, "unable to get socket option");
+    return -1;
+    }
+  rc = deinit_zmq_socket(socket);
+  if (rc)
+    {
+    log_err(rc, __func__, "unable to deinit ZMQ socket");
+    return -1;
+    }
+  socket = zmq_socket(g_zmq_context, socket_type);
+  if (!socket)
+    {
+    log_err(errno, __func__, "unable to create a socket");
+    return -1;
+    }
+
+  add_zconnection(id, socket, g_svr_zconn[id].func, g_svr_zconn[id].should_poll);
+  return 0;
   }
 
 #endif /* ZMQ */
@@ -858,39 +985,278 @@ int wait_request(
 #ifdef ZMQ
 
 /*
- * wait_zrequest - read requests from ZMQ sockets.
+ * wait_zrequest - wait for a request (socket with data to read)
+ * This routine does a zmq_poll on the readset of sockets,
+ * when data is ready, the processing routine associated with
+ * the socket is invoked.
  */
 
-int wait_zrequest()
+int wait_zrequest(
+
+  time_t  waittime,   /* I (seconds) */
+  long   *SState)     /* I (optional) */
 
   {
-  zmq_pollitem_t items[1];
+  int             i;
+  int             n;
+  time_t          now;
 
-  items[0].socket = svr_zconn[0].cn_socket;
-  items[0].events = ZMQ_POLLIN;
-  int rc = zmq_poll (items, 1, 0);
+  int             MaxNumDescriptors = 0;
+  int             SetSize = 0;
+  u_long   		  *SocketAddrSet = NULL;
+  u_long          *SocketPortSet = NULL;
 
-  if (rc == -1)
+
+  char            tmpLine[1024];
+  char            ipaddrStr[INET_ADDRSTRLEN];
+  long            OrigState = 0;
+
+  int poll_pos = 0;
+
+  if (SState != NULL)
+    OrigState = *SState;
+
+  pthread_mutex_lock(global_sock_read_mutex);
+  
+  /* selset = readset;*/  /* readset is global */
+  MaxNumDescriptors = get_max_num_descriptors();
+  SetSize = MaxNumDescriptors*sizeof(u_long);
+
+  SocketAddrSet = (u_long *)malloc(SetSize);
+  SocketPortSet = (u_long *)malloc(SetSize);
+  if((SocketAddrSet == NULL) || (SocketPortSet == NULL))
     {
-    log_err(errno, __func__, "Unable to poll in ZeroMQ sockets");
-    return(-1);
+    if(SocketAddrSet != NULL) free(SocketAddrSet);
+    if(SocketPortSet != NULL) free(SocketPortSet);
+    pthread_mutex_unlock(global_sock_read_mutex);
+    return (-1);
     }
-  if (rc == 0)
-    {
-    return(PBSE_NONE);
-    }
+  memcpy(SocketAddrSet,GlobalSocketAddrSet,SetSize);
+  memcpy(SocketPortSet,GlobalSocketPortSet,SetSize);
 
-  /* Some events occured on the listening sockets. */
-  if (items[0].revents & ZMQ_POLLIN)
+  // Fill ZMQ poll list
+  // First place stndard sockets to it.
+  for (i = 0; i < MaxNumDescriptors; i++)
     {
-    void *(*func)(void *) = svr_zconn[0].cn_func;
-    if (func != NULL)
+    if (FD_ISSET(i, GlobalSocketReadSet))
       {
-      void *args[1];
-      args[0] = svr_zconn[0].cn_socket;
-      func((void *)args);
+      // Update/set the corresponding poll item.
+      zmq_pollitem_t *current = &(gs_zmq_poll_list[poll_pos]);
+      if (current->fd != i)
+        {
+        current->fd = i;
+        }
+      if (current->socket)
+        {
+        current->socket = NULL;
+        }
+      poll_pos++;
       }
     }
+  // Now place ZMQ sockets to the poll list
+  for(i = 0; i < ZMQ_CONNECTION_COUNT; i++)
+    {
+    if (g_svr_zconn[i].socket != NULL && g_svr_zconn[i].should_poll)
+      {
+      gs_zmq_poll_list[poll_pos].socket = g_svr_zconn[i].socket;
+      gs_zmq_poll_list[poll_pos].events = ZMQ_POLLIN;
+      poll_pos++;
+      }
+    }
+  gs_zmq_poll_size = poll_pos; // #fds + #zsocks
+
+  pthread_mutex_unlock(global_sock_read_mutex);
+
+  n = zmq_poll (gs_zmq_poll_list, gs_zmq_poll_size, waittime * 1000 /* msec */);
+
+  if (n == -1)
+    {
+    if (errno == EINTR)
+      {
+      n = 0; /* interrupted, cycle around */
+      }
+    else
+      {
+      int i;
+
+      struct stat fbuf;
+
+      /* check all file descriptors to verify they are valid */
+
+      /* NOTE: selset may be modified by failed select() */
+
+      for (i = 0; i < gs_zmq_poll_size; i++)
+        {
+        if (gs_zmq_poll_list[i].socket || (gs_zmq_poll_list[i].revents & ZMQ_POLLIN))
+          {
+          continue;
+          }
+        if (fstat(gs_zmq_poll_list[i].fd, &fbuf) == 0)
+          {
+          continue;
+          }
+
+        /* clean up SdList and bad sd... */
+
+        globalset_del_sock(gs_zmq_poll_list[i].fd);
+        } /* END for each socket in global read set */
+
+      free(SocketAddrSet);
+      free(SocketPortSet);
+
+      log_err(errno, __func__, "Unable to select sockets to read requests");
+
+      return(-1);
+      }  /* END else (errno == EINTR) */
+    }    /* END if (n == -1) */
+
+  int zconn_idx = 0;
+  for (i = 0; (i < (gs_zmq_poll_size)) && (n > 0); i++)
+    {
+    if (gs_zmq_poll_list[i].revents & ZMQ_POLLIN)
+      {
+      if (gs_zmq_poll_list[i].socket)
+        {
+        // Handle ZMQ socket
+        // Find corresponding item in ZMQ listeners array
+        // NOTE: the ZMQ sockets orders are the same in the g_svr_zconn and in the poll list.
+        while (zconn_idx < ZMQ_CONNECTION_COUNT
+            && g_svr_zconn[zconn_idx].socket != gs_zmq_poll_list[i].socket)
+          {
+          zconn_idx++;
+          }
+        if (zconn_idx < ZMQ_CONNECTION_COUNT)
+          {
+          void *(*func)(void *) = g_svr_zconn[zconn_idx].func;
+          if (func != NULL)
+            {
+            void *args[1];
+            args[0] = g_svr_zconn[zconn_idx].socket;
+            func((void *)args);
+            }
+          zconn_idx++;
+          }
+        }
+      else
+        {
+        int fd = gs_zmq_poll_list[i].fd;
+        // Handle standard socket
+        pthread_mutex_lock(svr_conn[fd].cn_mutex);
+        /* this socket has data */
+        n--;
+
+        svr_conn[fd].cn_lasttime = time(NULL);
+
+        if (svr_conn[fd].cn_active != Idle)
+          {
+          void *(*func)(void *) = svr_conn[fd].cn_func;
+
+          netcounter_incr();
+
+          pthread_mutex_unlock(svr_conn[fd].cn_mutex);
+
+          if (func != NULL)
+            {
+            int args[3];
+
+            args[0] = fd;
+            args[1] = (int)SocketAddrSet[fd];
+            args[2] = (int)SocketPortSet[fd];
+            func((void *)args);
+            }
+
+          /* NOTE:  breakout if state changed (probably received shutdown request) */
+
+          if ((SState != NULL) && 
+              (OrigState != *SState))
+            break;
+          }
+        else
+          {
+          pthread_mutex_unlock(svr_conn[fd].cn_mutex);
+
+          globalset_del_sock(fd);
+          close_conn(fd, FALSE);
+
+          pthread_mutex_lock(num_connections_mutex);
+
+          sprintf(tmpLine, "closed connections to fd %d - num_connections=%d (select bad socket)",
+              fd,
+              num_connections);
+
+          pthread_mutex_unlock(num_connections_mutex);
+          log_err(-1, __func__, tmpLine);
+          }
+        }
+      }
+    } /* END for i */
+
+  free(SocketAddrSet);
+  free(SocketPortSet);
+
+  /* NOTE:  break out if shutdown request received */
+
+  if ((SState != NULL) && (OrigState != *SState))
+    return(0);
+
+  /* have any connections timed out ?? */
+
+  now = time((time_t *)0);
+
+  for (i = 0; i < gs_zmq_poll_size; i++)
+    {
+    struct connection *cp;
+    int fd;
+
+    if (gs_zmq_poll_list[i].socket)
+      {
+      continue;
+      }
+
+    fd = gs_zmq_poll_list[i].fd;
+    pthread_mutex_lock(svr_conn[fd].cn_mutex);
+
+    cp = &svr_conn[fd];
+
+    if (cp->cn_active != FromClientDIS)
+      {
+      pthread_mutex_unlock(svr_conn[fd].cn_mutex);
+
+      continue;
+      }
+
+    if ((now - cp->cn_lasttime) <= PBS_NET_MAXCONNECTIDLE)
+      {
+      pthread_mutex_unlock(svr_conn[fd].cn_mutex);
+  
+      continue;
+      }
+
+    if (cp->cn_authen & PBS_NET_CONN_NOTIMEOUT)
+      {
+      pthread_mutex_unlock(svr_conn[fd].cn_mutex);
+  
+      continue; /* do not time-out this connection */
+      }
+
+    /* NOTE:  add info about node associated with connection - NYI */
+
+    inet_ntop(AF_INET, &(cp->cn_addr), ipaddrStr, INET_ADDRSTRLEN);
+    snprintf(tmpLine, sizeof(tmpLine), "connection %d to host %s has timed out after %d seconds - closing stale connection\n",
+      fd,
+      ipaddrStr,
+      PBS_NET_MAXCONNECTIDLE);
+    
+    log_err(-1, "wait_request", tmpLine);
+
+    /* locate node associated with interface, mark node as down until node responds */
+
+    /* NYI */
+
+    close_conn(fd, TRUE);
+
+    pthread_mutex_unlock(svr_conn[fd].cn_mutex);
+    }  /* END for (fd) */
 
   return(PBSE_NONE);
   }  /* END wait_zrequest() */
@@ -1158,7 +1524,7 @@ unsigned int get_zsock_port(void *zsock) {
 }
 
 /*
- * add_zconnection - add a connection to the svr_zconn array.
+ * add_zconnection - add a connection to the g_svr_zconn array.
  * The params addr and port are in host order.
  *
  * NOTE:  This routine cannot fail.
@@ -1166,43 +1532,29 @@ unsigned int get_zsock_port(void *zsock) {
 
 int add_zconnection(
 
-  void   *socket,        /* ZMQ socket connection */
-  void *(*func)(void *)) /* function to invoke on data rdy to read */
+  enum zmq_connection_e id, /* ZMQ socket id (array index) */
+  void *socket,             /* ZMQ socket connection */
+  void *(*func)(void *),    /* Function to invoke on data rdy to read */
+  bool should_poll)         /*  */
 
   {
-  svr_zconn[num_zconnections].cn_socket = socket;
-  svr_zconn[num_zconnections].cn_func   = func;
-  unsigned int port = get_zsock_port(socket);
-  svr_zconn[num_zconnections].cn_authen = (port > 0 && port < IPPORT_RESERVED) ? PBS_NET_CONN_FROM_PRIVIL : 0;
+  assert(id < ZMQ_CONNECTION_COUNT);
 
-  num_zconnections++;
+  g_svr_zconn[id].socket = socket;
+  g_svr_zconn[id].func   = func;
+  g_svr_zconn[id].should_poll = should_poll;
+  unsigned int port = get_zsock_port(socket);
+  if (port > 0 && port < IPPORT_RESERVED)
+    {
+    g_svr_zconn[id].authen = PBS_NET_CONN_FROM_PRIVIL;
+    }
+  else
+    {
+    g_svr_zconn[id].authen = 0;
+    }
 
   return(PBSE_NONE);
   }  /* END add_zconnection() */
-
-
-
-/*
- * add_zconn - add a connection to the svr_conn array.
- * The params addr and port are in host order.
- *
- * NOTE:  This routine cannot fail.
- */
-#ifdef __cplusplus
-extern "C"
-{
-#endif
-int add_zconn(
-
-  void   *sock,          /* socket associated with connection */
-  void *(*func)(void *)) /* function to invoke on data rdy to read */
-
-  {
-  return(add_zconnection(sock, func));
-  }  /* END add_conn() */
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* ZMQ */
 

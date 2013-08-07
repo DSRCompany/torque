@@ -1917,7 +1917,7 @@ int main(
 #ifdef ZMQ
   if (use_zmq) {
     /* Initialize ZeroMQ context */
-    int rc = create_zmq_context();
+    int rc = init_zmq();
     if (rc) {
       if (LOGLEVEL > 0) {
         log_event(PBSEVENT_ERROR, PBS_EVENTCLASS_SERVER, __func__, "Can't initialize ZeroMQ context.");
@@ -2133,7 +2133,7 @@ int main(
     {
     char endpoint[32];
     sprintf(endpoint, "tcp://*:%d", pbs_status_port);
-    if (init_znetwork(endpoint, start_process_pbs_status_port, ZMQ_ROUTER) != 0)
+    if (init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, start_process_pbs_status_port, ZMQ_ROUTER) != 0)
       {
       perror("pbs_server: ZeroMQ socket");
 
@@ -2180,7 +2180,7 @@ int main(
 
 #ifdef ZMQ
   if (use_zmq) {
-    destroy_zmq_context();
+    deinit_zmq();
   }
 #endif /* ZMQ */
 

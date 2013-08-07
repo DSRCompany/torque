@@ -92,10 +92,6 @@ char pbs_current_user[PBS_MAXUSER];       /* user name for batch request */
 
 struct connect_handle connection[PBS_NET_MAX_CONNECTIONS];  /* array of connection handles */
 
-#ifdef ZMQ
-struct zconnect_handle zconnection[PBS_ZMQ_MAX_CONNECTIONS]; /* array of connection handles */
-#endif /* ZMQ */
-
 int pbs_errno = 0;         /* pbs error number */
 
 
