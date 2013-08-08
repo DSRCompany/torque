@@ -137,7 +137,10 @@ void send_update_soon();
 int read_status_strings(struct tcp_chan *chan, int version);
 
 #ifdef ZMQ
-int mom_read_json_status(size_t sz, void *data);
+int mom_read_json_status(size_t sz, char *data);
+void update_my_json_status(char *status_strings);
+char *create_json_statuses_buffer();
+void delete_json_statuses_buffer(void *data, void *hint);
 #endif /* ZMQ */
 
 #endif /* _MOM_COMM_H */

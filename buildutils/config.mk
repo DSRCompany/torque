@@ -2,7 +2,7 @@ AUTOMAKE_OPTIONS = foreign
 
 PBS_MKDIRS = $(SHELL) $(top_builddir)/buildutils/pbs_mkdirs
 
-AM_CPPFLAGS = -I$(top_srcdir)/src/include
+AM_CPPFLAGS = -std=c++0x -I$(top_srcdir)/src/include
 
 IFF_PATH = $(sbindir)/$(program_prefix)pbs_iff$(program_suffix)
 DEMUX_PATH = $(sbindir)/$(program_prefix)pbs_demux$(program_suffix)

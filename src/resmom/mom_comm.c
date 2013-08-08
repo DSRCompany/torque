@@ -99,6 +99,11 @@
 #include <arpa/inet.h>
 #endif
 #include <sys/wait.h>
+#ifdef ZMQ
+#include <map>
+#include <string>
+#include <jsoncpp/json/json.h>
+#endif /* ZMQ */
 
 #include "libpbs.h"
 #include "list_link.h"
@@ -167,6 +172,9 @@ hash_table_t        *received_table;
 int                  updates_waiting_to_send = 0;
 extern time_t       LastServerUpdateTime;
 extern struct connection svr_conn[];
+#ifdef ZMQ
+std::map<std::string, Json::Value> received_json_statuses;
+#endif /* ZMQ */
 
 const char *PMOMCommand[] =
   {
@@ -8826,12 +8834,197 @@ int read_status_strings(
 /*
  * Parse and handle mom status message from buffer.
  */
-int mom_read_json_status(size_t sz, void *data)
+int mom_read_json_status(size_t sz, char *data)
   {
-  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-      "Reading of status isn't implemented yet");
+  if (sz <= 0 || !data) 
+    {
+    return -1;
+    }
+
+  // read
+  Json::Value root;
+  Json::Reader reader;
+  bool parsingSuccessful = reader.parse(data, data + sz - 1, root, false);
+  if ( !parsingSuccessful )
+    {
+    // Can't read the message. Malformed?
+    return -1;
+    }
+
+  if (root["messageType"].asString() != "status")
+    {
+    // There is no 'messageType' key in the message
+    return -1;
+    }
+
+  const Json::Value body = root["body"];
+
+  if (!body.isArray())
+    {
+    // Body have to be an array of nodes statuses
+    return -1;
+    }
+
+  bool updated = false;
+  for (auto node_status : body)
+    {
+    std::string nodeId = node_status["node_id"].asString();
+    if (!nodeId.empty())
+      {
+      updated = true;
+      received_json_statuses[nodeId] = node_status;
+      }
+    }
+
+  if (updated)
+    {
+    // Don't answer anything by design
+    updates_waiting_to_send++;
+  
+    if (updates_waiting_to_send >= maxupdatesbeforesending)
+      {
+      if (LOGLEVEL >= 3)
+        {
+        snprintf(log_buffer, sizeof(log_buffer),
+          "Forcing update because I have received %d updates", 
+          updates_waiting_to_send);
+        log_event(PBSEVENT_SYSTEM, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+        }
+
+      send_update_soon();
+      }
+    }
+  
   return(PBSE_NONE);
+  
   } /* END mom_read_json_status() */
+
+
+
+void update_my_json_status(char *status_strings)
+  {
+
+  Json::Value my_status(Json::objectValue);
+
+  for (char *key_p = status_strings; key_p && *key_p; key_p += strlen(key_p) + 1)
+    {
+    // Split each key-value pair by '=' character and set Json values.
+    char *val_p = strchr(key_p, '=');
+    if (!val_p)
+      {
+      sprintf(log_buffer,"skipping non key-value pair \"%s\"", key_p);
+      log_err(0, __func__, log_buffer);
+      continue;
+      }
+
+    std::string key(key_p, val_p - key_p);
+    my_status[key] = val_p;
+    }
+
+  } /* END update_my_json_status() */
+
+
+
+enum message_type_e
+  {
+  MSG_TYPE_STATUS = 0,
+  MSG_TYPE_COUNT
+  };
+
+
+
+/**
+ * Generates UUID.
+ *
+ * NOTE: current implementation just generates random sequence. For better security libuuid should
+ * be used.
+ */
+std::string generate_uuid()
+  {
+  char buf[strlen("f81d4fae-7dec-11d0-a765-00a0c91e6bf6") + 1]; // an example UUID from RFC 4122
+
+  srand(time(NULL));
+
+  sprintf(buf, "%x%x-%x-%x-%x-%x%x%x", 
+      rand(), rand(), rand(), rand(), rand(), rand(), rand(), rand());
+  return buf;
+  }
+
+
+
+std::string get_message_type_string(enum message_type_e message_type)
+  {
+  switch (message_type)
+    {
+    case MSG_TYPE_STATUS:
+      return "status";
+    default:
+      assert(false);
+      return "";
+    }
+  }
+
+
+
+std::string get_current_time()
+  {
+  time_t rawtime;
+  struct tm * timeinfo;
+  const size_t buffer_size = strlen("2013-07-17 15:09:34.123+0400") + 1;
+  char buffer [buffer_size];
+
+  time(&rawtime);
+  timeinfo = localtime(&rawtime);
+
+  strftime(buffer, buffer_size, "%F %T.000%z", timeinfo);
+
+  return buffer;
+  }
+
+
+
+Json::Value create_default_json_header(enum message_type_e message_type)
+  {
+  extern char mom_alias[];
+  Json::Value root;
+
+  root["messageId"] = generate_uuid();
+  root["messageType"] = get_message_type_string(message_type);
+  root["ttl"] = 3000;
+  root["sentDate"] = get_current_time();
+  root["senderId"] = mom_alias;
+
+  return root;
+  }
+
+
+
+char *create_json_statuses_buffer()
+  {
+  Json::Value root = create_default_json_header(MSG_TYPE_STATUS);
+  for (auto status : received_json_statuses)
+    {
+    root["body"].append(status.second);
+    }
+
+#ifdef DEBUG
+  Json::StyledWriter writer;
+#else /* DEBUG */
+  Json::FastWriter writer;
+#endif /* DEBUG */
+  
+  // Write the message and return char buffer
+  std::string out = writer.write(root);
+  return strdup(out.c_str());
+  }
+
+
+
+void delete_json_statuses_buffer(void *data, void *hint)
+  {
+  free(data);
+  }
+
 
 #endif /* ZMQ */
 

@@ -314,6 +314,7 @@ extern int  use_nvidia_gpu;
 
 #ifdef ZMQ
 extern bool use_zmq;
+extern struct zconnection_s g_svr_zconn[];
 #endif /* ZMQ */
 
 void check_state(int);
@@ -1377,41 +1378,28 @@ int write_status_strings(
 
 #ifdef ZMQ
 
-void str_free(void *data, void *hint)
-  {
-  free(data);
-  }
-
-
-
 int zmq_send_status(
  
-  char *stat_str)
+  char *status_string)
  
   {
   int rc;
-#if 0
   char *msg_data;
-  char          *cp;
-  received_node *rn;
+  void *zsocket;
 
-  // TODO: Prepare the message consisting of
-  // 1. stat_str - This node status
-  json_prepare_status(stat_str);
-  // 2. other nodes
-  while ((rn = (received_node *)next_thing(received_statuses, &iter)) != NULL)
+  zsocket = g_svr_zconn[ZMQ_STATUS_SEND].socket;
+  if (!zsocket)
     {
-    cp = rn->statuses->str;
-    json_prepare_status(cp);
+    log_err(-1, __func__, "ZeroMQ socket isn't initialized yet");
     }
 
+  update_my_json_status(status_string);
+  msg_data = create_json_statuses_buffer();
+
   zmq_msg_t message;
-  zmq_msg_init_data (&message, msg_data, strlen(msg_data), str_free, NULL);
+  zmq_msg_init_data (&message, msg_data, strlen(msg_data), delete_json_statuses_buffer, NULL);
 
   rc = zmq_sendmsg (zsocket, &message, 0);
-#else
-  rc = 0;
-#endif
   return(rc);
   } /* END zmq_send_status() */
 

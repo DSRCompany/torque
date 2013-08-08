@@ -3316,7 +3316,7 @@ void *status_request(
 
       // Get message data
       size_t sz = zmq_msg_size(&part);
-      void *data = zmq_msg_data(&part);
+      char *data = (char *)zmq_msg_data(&part);
       if (!data)
         {
         log_err(errno, __func__, "can't get message data");
@@ -3327,11 +3327,11 @@ void *status_request(
       // Process the message
       if (msg_part_number == 0)
         {
-        printf("ZMQ Message Sender ID: %.*s\n", (int)sz, (char *)data);
+        printf("ZMQ Message Sender ID: %.*s\n", (int)sz, data);
         }
       else
         {
-        printf("ZMQ Message Data: %.*s\n", (int)sz, (char *)data);
+        printf("ZMQ Message Data: %.*s\n", (int)sz, data);
         mom_read_json_status(sz, data);
         }
       }
