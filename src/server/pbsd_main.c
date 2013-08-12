@@ -541,6 +541,8 @@ int pbs_read_json_status(size_t sz, char *data)
   log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
       "Reading of status");
 
+  printf("pbs_read_json_status\n\n");
+
   if (sz <= 0 || !data)
     {
     return -1;
@@ -572,14 +574,20 @@ int pbs_read_json_status(size_t sz, char *data)
 
   for (auto node_status : body)
     {
-    std::string nodeId = node_status["node_id"].asString();
+    std::string nodeId = node_status["nodeId"].asString();
     if (!nodeId.empty())
       {
         struct pbsnode *current = find_nodebyname(nodeId.c_str());
-        if(current != NULL)
+        if(current == NULL)
+          {
+            // TODO: create new node
+          }
+        else
           {
             if(node_status["firstUpdate"].asBool())
             {
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: firstUpdate = "+node_status["firstUpdate"].asString()).c_str());
 /*
               remove_hello(&hellos, current->nd_name);
               send_hello = TRUE;
@@ -588,70 +596,102 @@ int pbs_read_json_status(size_t sz, char *data)
             }
             if(!node_status["availMem"].isNull())
             {
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: availMem = "+node_status["availMem"].asString()).c_str());
               // node_status["availMem"].asUInt();
             }
             if(!node_status["idleTime"].isNull())
             {
               // node_status["idleTime"].asUInt();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: idleTime = "+node_status["idleTime"].asString()).c_str());
             }
             if(!node_status["nCpus"].isNull())
             {
               extern int handle_auto_np(struct pbsnode *np, char *str);
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: nCpus = "+node_status["nCpus"].asString()).c_str());
               handle_auto_np(current, (char*)node_status["nCpus"].asString().c_str());
             }
             if(!node_status["netLoad"].isNull())
             {
               // node_status["netLoad"].asUInt();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: netLoad = "+node_status["netLoad"].asString()).c_str());
             }
             if(!node_status["nSessions"].isNull())
             {
               // node_status["nSessions"].asUInt();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: nSessions = "+node_status["nSessions"].asString()).c_str());
             }
             if(!node_status["nUsers"].isNull())
             {
               // node_status["nUsers"].asUInt();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: nUsers = "+node_status["nUsers"].asString()).c_str());
             }
             if(!node_status["totMem"].isNull())
             {
               // node_status["totMem"].asUInt();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: totMem = "+node_status["totMem"].asString()).c_str());
             }
             if(!node_status["physMem"].isNull())
             {
               // node_status["physMem"].asUInt();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: physMem = "+node_status["physMem"].asString()).c_str());
             }
             if(!node_status["state"].isNull())
             {
               extern int process_state_str(struct pbsnode *np, char *str);
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: state = "+node_status["state"].asString()).c_str());
               process_state_str(current, (char*)("state="+node_status["state"].asString()).c_str());
             }
             if(!node_status["uName"].isNull())
             {
               extern int process_uname_str(struct pbsnode *np, char *str);
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: uName = "+node_status["uName"].asString()).c_str());
               process_uname_str(current, (char*)node_status["uName"].asString().c_str());
             }
             if(!node_status["loadAve"].isNull())
             {
               // node_status["loadAve"].asDouble();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: loadAve = "+node_status["loadAve"].asString()).c_str());
             }
             if(!node_status["opSys"].isNull())
             {
               // node_status["opSys"].asString();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: opSys = "+node_status["opSys"].asString()).c_str());
             }
             if(!node_status["gRes"].isNull())
             {
               // node_status["gRes"].asString();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: gRes = "+node_status["gRes"].asString()).c_str());
             }
             if(!node_status["varAttr"].isNull())
             {
               // node_status["varAttr"].asString();
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: varAttr = "+node_status["varAttr"].asString()).c_str());
             }
             if(node_status["sessions"].isArray())
             {
               // node_status["sessions"]
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: sessions = "+node_status["sessions"].asString()).c_str());
             }
             if(node_status["jobs"].isArray())
             {
               // node_status["jobs"]
+              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+                         ("status: jobs = "+node_status["jobs"].asString()).c_str());
               // walk job list reported by mom
 /*
               size_t         len = strlen(str) + strlen(current->nd_name) + 2;
@@ -687,7 +727,6 @@ int pbs_read_json_status(size_t sz, char *data)
 
   return(PBSE_NONE);
   } /* END mom_read_json_status() */
-
 
 void *start_process_pbs_status_port(
   void *zsock)
@@ -794,6 +833,16 @@ void *start_process_pbs_status_port(
   /* Thread exit */
   return(NULL);
   }
+
+void *process_pbs_status_port_thread(
+  void *zsock)
+{
+  while(true)
+    {
+    start_process_pbs_status_port(zsock);
+    }
+  return NULL;
+}
 
 #endif /* ZMQ */
 
@@ -2381,6 +2430,7 @@ int main(
     {
     char endpoint[32];
     sprintf(endpoint, "tcp://*:%d", pbs_status_port);
+    printf("init_znetwork\n\n");
     if (init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, start_process_pbs_status_port, ZMQ_ROUTER) != 0)
       {
       perror("pbs_server: ZeroMQ socket");
@@ -2389,6 +2439,10 @@ int main(
 
       exit(3);
       }
+      // TODO: FIXME: rewrite thread creation
+      pthread_t thr;
+      extern struct zconnection_s g_svr_zconn[ZMQ_CONNECTION_COUNT];
+      pthread_create(&thr, NULL, process_pbs_status_port_thread, g_svr_zconn[ZMQ_STATUS_RECEIVE].socket);
     }
 #endif /* ZMQ */
 
