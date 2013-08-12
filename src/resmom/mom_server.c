@@ -322,6 +322,9 @@ void state_to_server(int, int);
 void node_comm_error(node_comm_t *, const char *);
 int  add_mic_status(boost::ptr_vector<std::string>& status);
 int  add_gpu_status(boost::ptr_vector<std::string>& status);
+#ifdef ZMQ
+int update_status_connection();
+#endif /* ZMQ */
 
 /* clear servers */
 void clear_servers()
@@ -1413,7 +1416,7 @@ int zmq_send_status(
   zmq_msg_t message;
   zmq_msg_init_data (&message, msg_data, strlen(msg_data), delete_json_statuses_buffer, NULL);
 
-  rc = zmq_sendmsg (zsocket, &message, 0);
+  rc = zmq_sendmsg (zsocket, &message, ZMQ_DONTWAIT);
   if (rc != -1 && LOGLEVEL >= 7)
     {
     snprintf(log_buffer, sizeof(log_buffer),
@@ -1614,7 +1617,18 @@ void mom_server_all_update_stat(void)
       }
     else /* !use_zmq */
       {
-      zmq_send_status(mom_status->str);
+      rc = zmq_send_status(mom_status->str);
+      if (rc < 0)
+        {
+        update_status_connection();
+        rc = zmq_send_status(mom_status->str);
+        }
+      if (rc >= 0)
+        {
+        LastServerUpdateTime = time_now;
+        UpdateFailCount = 0;
+        }
+      return;
       }
 #endif /* ZMQ */
     }
@@ -2147,7 +2161,7 @@ void sort_paths()
  * Connect the socket with the specified id using the ip address and the port from the given
  * sock_addr structure.
  */
-int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr)
+int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr, int port)
   {
 // TODO: Rework this:
 // 1. We have to use different port (probably default for now)
@@ -2167,7 +2181,7 @@ int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr
     }
 
   printed_length = snprintf(conn_url_buf, CONN_URL_LENGTH,
-      "tcp://%s:%u", inet_ntoa(sock_addr->sin_addr), sock_addr->sin_port);
+      "tcp://%s:%u", inet_ntoa(sock_addr->sin_addr), port);
   assert(printed_length < CONN_URL_LENGTH);
 
   rc = zmq_connect(g_svr_zconn[id].socket, conn_url_buf);
@@ -2191,6 +2205,11 @@ int update_status_connection()
   node_comm_t *nc = NULL;
   bool connected = false;
 
+  if (LOGLEVEL >= 9)
+    {
+    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "Update status port connections");
+    }
+
   close_zmq_connection(ZMQ_STATUS_SEND);
 
   // Try to connect to all nodes of a level.
@@ -2200,7 +2219,12 @@ int update_status_connection()
     node_comm_t *first_node= nc;
     do
       {
-      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr));
+      if (LOGLEVEL >= 9)
+        {
+        sprintf(log_buffer, "Connecting to node %s", nc->name);
+        log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+        }
+      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr), PBS_MOM_STATUS_SERVICE_PORT);
       if (!rc)
         {
         connected = true;
@@ -2209,21 +2233,40 @@ int update_status_connection()
     while (nc && nc != first_node);
     }
 
+  rc = PBSE_NONE;
+
   // If connected to no one node try to connect to one of the servers.
-  if (connected)
-    {
-    rc = PBSE_NONE;
-    }
-  else
+  if (!connected)
     {
     /* now, once we contact one server we stop attempting to report in */
     for (int i = 0; i < PBS_MAXSERVER && !rc; i++)
       {
-      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(mom_servers[i].sock_addr));
+      if ((mom_servers[i].pbs_servername[0] == '\0') ||
+          (time_now < (mom_servers[i].MOMLastSendToServerTime + ServerStatUpdateInterval)))
+        {
+        continue;
+        }
+      if (LOGLEVEL >= 9)
+        {
+        sprintf(log_buffer, "Connecting to pbs server %s", mom_servers[i].pbs_servername);
+        log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+        }
+      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(mom_servers[i].sock_addr), PBS_STATUS_SERVICE_PORT);
+      if (!rc) // Success
+        {
+        connected = true;
+        }
       }
-    if (rc)
+    if (!connected)
       {
-      log_err(-1, __func__, "Could not contact any of the servers to send an update");
+      if (rc)
+        {
+        log_err(-1, __func__, "Could not contact any of the servers to send an update");
+        }
+      else
+        {
+        rc = NO_SERVER_CONFIGURED;
+        }
       }
     }
 

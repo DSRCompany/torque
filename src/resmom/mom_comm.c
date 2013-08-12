@@ -8918,6 +8918,7 @@ void update_my_json_status(char *status_strings)
       }
 
     std::string key(key_p, val_p - key_p);
+    val_p++; // Move beyond the '=' character
     my_status[key] = val_p;
     }
 
