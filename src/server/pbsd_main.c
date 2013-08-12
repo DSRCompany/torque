@@ -402,46 +402,46 @@ static void need_y_response(
 
 
 int process_pbs_server_port(
-     
+
   int sock,
   int is_scheduler_port,
   long *args)
- 
+
   {
   int              proto_type;
   int              rc = PBSE_NONE;
   int              version;
   char             log_buf[LOCAL_LOG_BUF_SIZE];
   struct tcp_chan *chan = NULL;
-   
+
   if ((chan = DIS_tcp_setup(sock)) == NULL)
     {
     return(PBSE_MEM_MALLOC);
     }
 
   proto_type = disrui_peek(chan,&rc);
-  
+
   switch (proto_type)
     {
     case PBS_BATCH_PROT_TYPE:
-      
+
       rc = process_request(chan);
-      
+
       break;
-      
+
     case IS_PROTOCOL:
 
       version = disrsi(chan, &rc);
-      
+
       if (rc != DIS_SUCCESS)
         {
         log_err(-1,  __func__, "Cannot read version - skipping this request.\n");
-        rc = PBSE_SOCKET_CLOSE; 
+        rc = PBSE_SOCKET_CLOSE;
         break;
         }
-      
+
       rc = svr_is_request(chan, version, args);
-      
+
       break;
 
     default:
@@ -453,10 +453,10 @@ int process_pbs_server_port(
       if (getpeername(sock, &s_addr, &len) == 0)
         {
         addr = (struct sockaddr_in *)&s_addr;
-        
+
         if (proto_type == 0)
           {
-          /* 
+          /*
            * Don't log error if close is on scheduler port.  Scheduler is
            * responsible for closing the connection
            */
@@ -503,14 +503,14 @@ int process_pbs_server_port(
 
 
 void *start_process_pbs_server_port(
-    
+
   void *new_sock)
 
   {
   long *args = (long *)new_sock;
   int sock;
   int rc = PBSE_NONE;
- 
+
   sock = (int)args[0];
 
   while ((rc != PBSE_SOCKET_DATA) &&
@@ -575,7 +575,113 @@ int pbs_read_json_status(size_t sz, char *data)
     std::string nodeId = node_status["node_id"].asString();
     if (!nodeId.empty())
       {
-      // TODO: implement: handle node status
+        struct pbsnode *current = find_nodebyname(nodeId.c_str());
+        if(current != NULL)
+          {
+            if(node_status["firstUpdate"].asBool())
+            {
+/*
+              remove_hello(&hellos, current->nd_name);
+              send_hello = TRUE;
+              clear_nvidia_gpus(current);
+*/
+            }
+            if(!node_status["availMem"].isNull())
+            {
+              // node_status["availMem"].asUInt();
+            }
+            if(!node_status["idleTime"].isNull())
+            {
+              // node_status["idleTime"].asUInt();
+            }
+            if(!node_status["nCpus"].isNull())
+            {
+              extern int handle_auto_np(struct pbsnode *np, char *str);
+              handle_auto_np(current, (char*)node_status["nCpus"].asString().c_str());
+            }
+            if(!node_status["netLoad"].isNull())
+            {
+              // node_status["netLoad"].asUInt();
+            }
+            if(!node_status["nSessions"].isNull())
+            {
+              // node_status["nSessions"].asUInt();
+            }
+            if(!node_status["nUsers"].isNull())
+            {
+              // node_status["nUsers"].asUInt();
+            }
+            if(!node_status["totMem"].isNull())
+            {
+              // node_status["totMem"].asUInt();
+            }
+            if(!node_status["physMem"].isNull())
+            {
+              // node_status["physMem"].asUInt();
+            }
+            if(!node_status["state"].isNull())
+            {
+              extern int process_state_str(struct pbsnode *np, char *str);
+              process_state_str(current, (char*)("state="+node_status["state"].asString()).c_str());
+            }
+            if(!node_status["uName"].isNull())
+            {
+              extern int process_uname_str(struct pbsnode *np, char *str);
+              process_uname_str(current, (char*)node_status["uName"].asString().c_str());
+            }
+            if(!node_status["loadAve"].isNull())
+            {
+              // node_status["loadAve"].asDouble();
+            }
+            if(!node_status["opSys"].isNull())
+            {
+              // node_status["opSys"].asString();
+            }
+            if(!node_status["gRes"].isNull())
+            {
+              // node_status["gRes"].asString();
+            }
+            if(!node_status["varAttr"].isNull())
+            {
+              // node_status["varAttr"].asString();
+            }
+            if(node_status["sessions"].isArray())
+            {
+              // node_status["sessions"]
+            }
+            if(node_status["jobs"].isArray())
+            {
+              // node_status["jobs"]
+              // walk job list reported by mom
+/*
+              size_t         len = strlen(str) + strlen(current->nd_name) + 2;
+              char          *jobstr = (char *)calloc(1, len);
+              sync_job_info *sji = (sync_job_info *)calloc(1, sizeof(sync_job_info));
+
+              if ((jobstr != NULL) &&
+                  (sji != NULL))
+              {
+                sprintf(jobstr, "%s:%s", current->nd_name, str+5);
+                sji->input = jobstr;
+                sji->timestamp = time(NULL);
+
+                // sji must be freed in sync_node_jobs
+                enqueue_threadpool_request(sync_node_jobs, sji);
+              }
+              else
+              {
+                if (jobstr != NULL)
+                {
+                  free(jobstr);
+                }
+                if (sji != NULL)
+                {
+                  free(sji);
+                }
+              }
+*/
+            }
+          }
       }
     }
 
@@ -1357,7 +1463,7 @@ void *handle_queue_routing_retries(
   int        rc;
   char       log_buf[LOCAL_LOG_BUF_SIZE];
   pthread_attr_t  routing_attr;
- 
+
   route_thread_active = TRUE;
   pthread_cleanup_push(route_listener_cleanup, vp);
 
@@ -1386,7 +1492,7 @@ void *handle_queue_routing_retries(
           {
           queuename = strdup(pque->qu_qs.qu_name); /* make sure this gets freed inside queue_route */
           /* thread not yet started. Let's start the route retry thread for this routing queue */
-          
+
           rc = pthread_create(&pque->route_retry_thread_id, &routing_attr, queue_route, queuename);
           if (rc != 0)
             {
@@ -1412,7 +1518,7 @@ void *handle_queue_routing_retries(
               snprintf(log_buf, sizeof(log_buf), "pthread_attr_init failed: %d  in %s. Will try next iteration",
                 rc,  __func__);
               log_err(-1, msg_daemonname, log_buf);
-              
+
               free(queuename);
               /* Just go on to the next queue. do not return NULL here */
               }
@@ -1449,7 +1555,7 @@ void *handle_scheduler_contact(
 
 
 /*
- * accept_listener_cleanup() 
+ * accept_listener_cleanup()
  */
 
 void accept_listener_cleanup(
@@ -1464,7 +1570,7 @@ void accept_listener_cleanup(
 
 
 void *start_accept_listener(
-    
+
   void *vp)
 
   {
@@ -1716,7 +1822,7 @@ void main_loop(void)
         set_svr_attr(SRV_ATR_tcp_timeout, &timeout);
         log_event(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, msg_daemonname, log_buf);
         }
-      
+
       DIS_tcp_settimeout(timeout);
       }
 
@@ -1780,9 +1886,9 @@ void main_loop(void)
       LOGLEVEL = log;
       }
 
-    /* 
+    /*
      * Can we comment this out? Would anything above change the
-     * server state without setting the 'state' variable? 
+     * server state without setting the 'state' variable?
      */
     get_svr_attr_l(SRV_ATR_State, &state);
     if (state == SV_STATE_SHUTSIG)
@@ -2068,7 +2174,7 @@ int main(
     }
   }
 #endif /* ZMQ */
-  
+
   if ((check_network_port(pbs_server_port_dis) != PBSE_NONE) &&
       (!high_availability_mode))
     {
@@ -3447,4 +3553,3 @@ int unlock_sv_qs_mutex(pthread_mutex_t *sv_qs_mutex, const char *msg_string)
   }
 
 /* END pbsd_main.c */
-
