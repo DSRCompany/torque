@@ -112,4 +112,5 @@ int  close_zmq_connection(enum zmq_connection_e);
 int  init_znetwork(enum zmq_connection_e, char *, void *(*readfunc)(void *), int);
 int  add_zconnection(enum zmq_connection_e, void *, void *(*func)(void *), bool);
 int  wait_zrequest(time_t waittime, long *);
+void start_socket_thread(int sock, void*(*func)(void*));
 #endif /* ZMQ */

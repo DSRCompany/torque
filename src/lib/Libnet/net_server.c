@@ -170,6 +170,12 @@ static zmq_pollitem_t *gs_zmq_poll_list = NULL;
 /* Poll array size */
 static int             gs_zmq_poll_size = 0;
 
+void start_socket_thread(int sock, void*(*func)(void*))
+{
+  pthread_t thr;
+  pthread_create(&thr, NULL, func, g_svr_zconn[sock].socket);
+}
+
 #endif /* ZMQ */
 
 /*

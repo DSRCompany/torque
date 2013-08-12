@@ -2439,10 +2439,7 @@ int main(
 
       exit(3);
       }
-      // TODO: FIXME: rewrite thread creation
-      pthread_t thr;
-      extern struct zconnection_s g_svr_zconn[ZMQ_CONNECTION_COUNT];
-      pthread_create(&thr, NULL, process_pbs_status_port_thread, g_svr_zconn[ZMQ_STATUS_RECEIVE].socket);
+    start_socket_thread(ZMQ_STATUS_RECEIVE, process_pbs_status_port_thread);
     }
 #endif /* ZMQ */
 
