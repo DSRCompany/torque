@@ -105,6 +105,7 @@
 #include <libxml/parser.h>
 #ifdef ZMQ
 #include <zmq.h>
+#include <jsoncpp/json/json.h>
 #endif /* ZMQ */
 #include "list_link.h"
 #include "work_task.h"
@@ -530,18 +531,159 @@ void *start_process_pbs_server_port(
   /* Thread exit */
   return(NULL);
   }
- 
+
 
 
 #ifdef ZMQ
 
-void *start_process_pbs_status_port(
-    
-  void *new_sock)
-
+int pbs_read_json_status(size_t sz, char *data)
   {
-  // TODO: Implement
-  printf("Received status message\n");
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+      "Reading of status");
+
+  if (sz <= 0 || !data)
+    {
+    return -1;
+    }
+
+  // read
+  Json::Value root;
+  Json::Reader reader;
+  bool parsingSuccessful = reader.parse(data, data + sz - 1, root, false);
+  if ( !parsingSuccessful )
+    {
+    // Can't read the message. Malformed?
+    return -1;
+    }
+
+  if (root["messageType"].asString() != "status")
+    {
+    // There is no 'messageType' key in the message
+    return -1;
+    }
+
+  const Json::Value body = root["body"];
+
+  if (!body.isArray())
+    {
+    // Body have to be an array of nodes statuses
+    return -1;
+    }
+
+  for (auto node_status : body)
+    {
+    std::string nodeId = node_status["node_id"].asString();
+    if (!nodeId.empty())
+      {
+      // TODO: implement: handle node status
+      }
+    }
+
+  return(PBSE_NONE);
+  } /* END mom_read_json_status() */
+
+
+void *start_process_pbs_status_port(
+  void *zsock)
+  {
+  // By 0MQ design the message would consist at least of 2 parts:
+  // 1. sender ID
+  // 2. first part of the message data
+  // By our design messages would consist of the only 2 these parts.
+  zmq_msg_t part;
+  int msg_part_number = 0;
+  bool close_msg = false;
+  int more = true;
+  size_t more_size = sizeof more;
+  // Read all messages received for this time
+  while(true)
+    {
+    int rc = 0;
+
+    rc = zmq_msg_init(&part);
+    if (rc != 0)
+      {
+      log_err(errno, __func__, "can't init recv message");
+      break;
+      }
+    close_msg = true;
+
+    // Receive the message
+    rc = zmq_msg_recv(&part, zsock, ZMQ_DONTWAIT);
+    if (rc == -1)
+      {
+      // errno = EAGAIN means there is no message to receive
+      if (errno == EAGAIN)
+        {
+        rc = 0;
+        }
+      else
+        {
+        log_err(errno, __func__, "can't recv message");
+        }
+      break;
+      }
+
+    // Check if there are more part(s)
+    rc = zmq_getsockopt(zsock, ZMQ_RCVMORE, &more, &more_size);
+    if (rc != 0)
+      {
+      log_err(errno, __func__, "can't get socket option");
+      break;
+      }
+
+    // Process the only first two message parts that are ID and the message.
+    // Skip other parts if present
+    if (msg_part_number < 2)
+      {
+      if (msg_part_number == 0 && !more)
+        {
+        // We expect data block after the ID
+        log_err(-1, __func__, "multipart data expected");
+        break;
+        }
+
+      // Get message data
+      size_t sz = zmq_msg_size(&part);
+      void *data = zmq_msg_data(&part);
+      if (!data)
+        {
+        log_err(errno, __func__, "can't get message data");
+        break;
+        }
+
+      // Got well formed message without errors.
+      // Process the message
+      if (msg_part_number == 0)
+        {
+        printf("ZMQ Message Sender ID: %.*s\n", (int)sz, (char *)data);
+        }
+      else
+        {
+        printf("ZMQ Message Data: %.*s\n", (int)sz, (char *)data);
+        pbs_read_json_status(sz, (char *)data);
+        }
+      }
+
+    // Deinit the message
+    close_msg = false;
+    zmq_msg_close(&part);
+
+    // Update part number
+    if (more)
+      {
+      msg_part_number++;
+      }
+    else
+      {
+      msg_part_number = 0;
+      }
+    }
+  // Cleanup after break
+  if (close_msg)
+    {
+    zmq_msg_close(&part);
+    }
 
   /* Thread exit */
   return(NULL);
