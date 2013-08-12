@@ -6,7 +6,7 @@ xpbsbindir = $(XPBS_DIR)/bin
 
 xpbsbin_PROGRAMS = xpbs_datadump xpbs_scriptload
 
-LDADD = $(PBS_LIBS)
+LDADD = $(PBS_LIBS) $(TRANSPORTLIBS)
 
 xpbs_datadump_SOURCES = xpbs_datadump.c
 xpbs_scriptload_SOURCES = xpbs_scriptload.c

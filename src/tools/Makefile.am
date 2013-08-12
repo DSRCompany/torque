@@ -39,12 +39,12 @@ printtracking_SOURCES = printtracking.c
 printserverdb_SOURCES = printserverdb.c
 tracejob_SOURCES = tracejob.c
 
-pbs_tclsh_LDADD = $(PBS_LIBS) $(MY_TCL_LIBS)
+pbs_tclsh_LDADD = $(PBS_LIBS) $(MY_TCL_LIBS) $(TRANSPORTLIBS)
 pbs_tclsh_CFLAGS = $(MY_TCL_INCS)
 pbs_tclsh_SOURCES = pbsTclInit.c ../scheduler.tcl/pbs_tclWrap.c \
 		    ../scheduler.tcl/site_tclWrap.c
 
-pbs_wish_LDADD = $(PBS_LIBS) $(MY_TCLTK_LIBS)
+pbs_wish_LDADD = $(PBS_LIBS) $(MY_TCLTK_LIBS) $(TRANSPORTLIBS)
 pbs_wish_CFLAGS = $(MY_TCLTK_INCS)
 pbs_wish_SOURCES = pbsTkInit.c ../scheduler.tcl/pbs_tclWrap.c \
 		   ../scheduler.tcl/site_tclWrap.c
