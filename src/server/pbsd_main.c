@@ -754,18 +754,10 @@ void *start_process_pbs_status_port(
     close_msg = true;
 
     // Receive the message
-    rc = zmq_msg_recv(&part, zsock, ZMQ_DONTWAIT);
+    rc = zmq_msg_recv(&part, zsock, 0);
     if (rc == -1)
       {
-      // errno = EAGAIN means there is no message to receive
-      if (errno == EAGAIN)
-        {
-        rc = 0;
-        }
-      else
-        {
-        log_err(errno, __func__, "can't recv message");
-        }
+      log_err(errno, __func__, "can't recv message");
       break;
       }
 
