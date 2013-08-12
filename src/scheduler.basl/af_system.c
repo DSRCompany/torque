@@ -263,7 +263,7 @@ toolong(int sig)
 
   if ((cpid = fork()) > 0)        /* parent re-execs itself */
     {
-#ifndef linux
+#ifndef __linux__
     sleep(5);
 #endif
 

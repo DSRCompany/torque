@@ -157,7 +157,7 @@ typedef unsigned long pbs_net_t;        /* for holding host addresses */
 #define SCM_CREDS SCM_CREDENTIALS
 #endif
 
-#ifndef linux
+#ifndef __linux__
 #  ifndef __NetBSD__
 #    define SPC_PEER_UID(c)   ((c)->cr_uid)
 #    define SPC_PEER_GID(c)   ((c)->cr_groups[0])

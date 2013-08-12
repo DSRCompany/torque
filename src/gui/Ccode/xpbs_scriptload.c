@@ -121,7 +121,7 @@
 #include <sys/ioctl.h>
 #endif /* HAVE_SYS_IOCTL_H */
 
-#if !defined(sgi) && !defined(_AIX) && !defined(linux)
+#if !defined(sgi) && !defined(_AIX) && !defined(__linux__)
 #include <sys/tty.h>
 #endif  /* ! sgi */
 
@@ -356,7 +356,7 @@ int process_opts(
 
   if (pass > 0)
     {
-#ifdef linux
+#ifdef __linux__
     optind = 0;  /* prime getopt's starting point */
 #else
     optind = 1;  /* prime getopt's starting point */

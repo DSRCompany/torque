@@ -2527,7 +2527,7 @@ void process_opts(
 
 /*  if (pass > 0)
     { */
-#ifdef linux
+#ifdef __linux__
     optind = 0;  /* prime getopt's starting point */
 #else
     optind = 1;  /* prime getopt's starting point */
@@ -3668,7 +3668,7 @@ void process_opts(
           FlagString[2] = '\0';
 
           /* Duplicate code */
-/* #ifdef linux */
+/* #ifdef __linux__ */
           aindex = 1;  /* prime getopt's starting point */
           tmpArgV[0] = (char *)"";
 /* #else */
@@ -4213,7 +4213,7 @@ void main_func(
 
   /* NOTE:  load config before processing opts since config may modify how opts are handled */
 
-#ifdef linux
+#ifdef __linux__
   optind = 0;  /* prime getopt's starting point */
 #else
   optind = 1;  /* prime getopt's starting point */
