@@ -1387,6 +1387,13 @@ int zmq_send_status(
   char *msg_data;
   void *zsocket;
 
+  if (LOGLEVEL >= 9)
+    {
+    snprintf(log_buffer, sizeof(log_buffer),
+      "Attempting to send status update");
+    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
+    }
+ 
   zsocket = g_svr_zconn[ZMQ_STATUS_SEND].socket;
   if (!zsocket)
     {
@@ -1396,10 +1403,23 @@ int zmq_send_status(
   update_my_json_status(status_string);
   msg_data = create_json_statuses_buffer();
 
+  if (LOGLEVEL >= 9)
+    {
+    snprintf(log_buffer, sizeof(log_buffer),
+      "Status message is the following (could be truncated):\n%s", msg_data);
+    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
+    }
+
   zmq_msg_t message;
   zmq_msg_init_data (&message, msg_data, strlen(msg_data), delete_json_statuses_buffer, NULL);
 
   rc = zmq_sendmsg (zsocket, &message, 0);
+  if (rc != -1 && LOGLEVEL >= 7)
+    {
+    snprintf(log_buffer, sizeof(log_buffer),
+        "Successfully sent status update to mom");
+    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER,__func__,log_buffer);
+    }
   return(rc);
   } /* END zmq_send_status() */
 

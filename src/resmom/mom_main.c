@@ -3978,7 +3978,7 @@ void initialize_globals(void)
     }
 
 #ifdef ZMQ
-  ptr = getenv("PBS_STATUS_SERVICE_PORT");
+  ptr = getenv("PBS_MOM_STATUS_SERVICE_PORT");
 
   if (ptr != NULL)
     {
@@ -3988,9 +3988,9 @@ void initialize_globals(void)
   if (pbs_status_port <= 0)
     {
     pbs_status_port = get_svrport(
-        (char *)PBS_STATUS_SERVICE_NAME,
+        (char *)PBS_MOM_STATUS_SERVICE_NAME,
         (char *)"tcp",
-        PBS_STATUS_SERVICE_PORT);
+        PBS_MOM_STATUS_SERVICE_PORT);
     }
 #endif /* ZMQ */
 
@@ -4892,7 +4892,7 @@ int setup_program_environment(void)
     sprintf(endpoint, "tcp://*:%d", pbs_status_port);
     if (init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, status_request, ZMQ_DEALER) != 0)
       {
-      log_err(-1, msg_daemonname, (char *)"init_network failed ZeroMQ socket");
+      log_err(-1, msg_daemonname, (char *)"init_znetwork failed to bind to ZeroMQ socket");
       return(3);
       }
     }

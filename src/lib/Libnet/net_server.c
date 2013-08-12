@@ -604,9 +604,10 @@ int init_znetwork(
   }
 
   rc = zmq_bind(socket, endpoint);
-  if (!rc)
+  if (rc)
     {
-    log_err(errno, __func__, "unable to bind to the socket");
+    sprintf(log_buffer, "unable to bind to the endpoint '%s'", endpoint);
+    log_err(errno, __func__, log_buffer);
     return(-1);
     }
 

@@ -8941,12 +8941,15 @@ enum message_type_e
  */
 std::string generate_uuid()
   {
-  char buf[strlen("f81d4fae-7dec-11d0-a765-00a0c91e6bf6") + 1]; // an example UUID from RFC 4122
+  const int buf_len = strlen("f81d4fae-7dec-11d0-a765-00a0c91e6bf6") + 1; // an example UUID
+  char buf[buf_len];
+  const int div = RAND_MAX / 0xffff;
 
   srand(time(NULL));
 
-  sprintf(buf, "%x%x-%x-%x-%x-%x%x%x", 
-      rand(), rand(), rand(), rand(), rand(), rand(), rand(), rand());
+  snprintf(buf, buf_len, "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
+      rand() / div, rand() / div, rand() / div, rand() / div,
+      rand() / div, rand() / div, rand() / div, rand() / div);
   return buf;
   }
 
