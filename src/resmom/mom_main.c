@@ -3309,13 +3309,6 @@ void *status_request(
     // Skip other parts if present
     if (msg_part_number < 2)
       {
-      if (msg_part_number == 0 && !more)
-        {
-        // We expect data block after the ID
-        log_err(-1, __func__, "multipart data expected");
-        break;
-        }
-
       // Get message data
       size_t sz = zmq_msg_size(&part);
       char *data = (char *)zmq_msg_data(&part);
@@ -3327,13 +3320,23 @@ void *status_request(
 
       // Got well formed message without errors.
       // Process the message
-      if (msg_part_number == 0)
+      if (msg_part_number == 0 && more)
         {
-        printf("ZMQ Message Sender ID: %.*s\n", (int)sz, data);
+        // First part of a multipart message: client ID
+        if (LOGLEVEL >= 10)
+          {
+          sprintf(log_buffer, "ZMQ Message Sender ID: %.*s", (int)sz, (char *)data);
+          log_record( PBSEVENT_SYSTEM, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+          }
         }
       else
         {
-        printf("ZMQ Message Data: %.*s\n", (int)sz, data);
+        // Non-multipart or second part of a multipart message: data
+        if (LOGLEVEL >= 10)
+          {
+          sprintf(log_buffer, "ZMQ Message Data: %.*s", (int)sz, (char *)data);
+          log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+          }
         mom_read_json_status(sz, data);
         }
       }
