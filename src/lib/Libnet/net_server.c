@@ -1512,32 +1512,6 @@ int add_conn(
 
 #ifdef ZMQ
 
-unsigned int get_zsock_port(void *zsock) {
-  size_t length = 256;
-  char endpoint[256];
-
-  // Get the socket endpoint
-  int rc = zmq_getsockopt(zsock, ZMQ_LAST_ENDPOINT, endpoint, &length);
-  if (rc == -1) {
-    return 0;
-  }
-  // Parse the endpoint (<proto>://<addr>:<port>)
-  // Lookup for the second colon
-  char *port = strchr(endpoint, ':');
-  if (port)
-    {
-    port = strchr(endpoint, ':');
-    }
-  // Not found or points to the last byte or out of the array.
-  if (!port || port >= endpoint + length - 1)
-    {
-    return 0;
-    }
-  port++;
-
-  return (unsigned int) atol(port);
-}
-
 /*
  * add_zconnection - add a connection to the g_svr_zconn array.
  * The params addr and port are in host order.
@@ -1559,15 +1533,6 @@ int add_zconnection(
   g_svr_zconn[id].socket = socket;
   g_svr_zconn[id].func   = func;
   g_svr_zconn[id].should_poll = should_poll;
-  unsigned int port = get_zsock_port(socket);
-  if (port > 0 && port < IPPORT_RESERVED)
-    {
-    g_svr_zconn[id].authen = PBS_NET_CONN_FROM_PRIVIL;
-    }
-  else
-    {
-    g_svr_zconn[id].authen = 0;
-    }
   g_svr_zconn[id].connected = false;
 
   return(PBSE_NONE);
