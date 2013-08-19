@@ -198,7 +198,7 @@ int reserve_node(struct pbsnode *,short,job *,char *,struct howl **);
 int build_host_list(struct howl **,struct pbssubn *,struct pbsnode *);
 int procs_available(int proc_ct);
 void check_nodes(struct work_task *);
-int gpu_entry_by_id(struct pbsnode *,char *, int);
+int gpu_entry_by_id(struct pbsnode *,const char *, int);
 job *get_job_from_jobinfo(struct jobinfo *,struct pbsnode *);
 
 /* marks a stream as finished being serviced */

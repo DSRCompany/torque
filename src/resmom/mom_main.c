@@ -3250,6 +3250,8 @@ void *tcp_request(
 
 #ifdef ZMQ
 
+int update_status_connection();
+
 void *status_request(
 
   void *args)
@@ -5349,6 +5351,10 @@ int setup_program_environment(void)
     }
 
   srand(get_random_number());
+
+#ifdef ZMQ
+  update_status_connection();
+#endif /* ZMQ */
 
   return(PBSE_NONE);
   }  /* END setup_program_environment() */

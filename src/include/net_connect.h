@@ -230,7 +230,7 @@ int get_max_num_descriptors(void);
 int get_fdset_size(void);
 char * netaddr_pbs_net_t(pbs_net_t);
 #ifdef ZMQ
-int add_zconnection(enum zmq_connection_e, void *, void *(*func)(void *), bool);
+int add_zconnection(enum zmq_connection_e, void *, void *(*func)(void *), bool, bool);
 int init_znetwork(enum zmq_connection_e, char *, void *(*readfunc)(void *), int);
 int wait_zrequest(time_t waittime, long *);
 #endif /* ZMQ */
@@ -267,6 +267,7 @@ struct zconnection_s
   unsigned short authen; /* authentication flags */
   void *(*func)(void *); /* read function when data rdy */
   bool should_poll;      /* add this socket to be polled if true */
+  bool connected;        /* at least one bind or connect request was appered */
   };
 
 #endif /* ZMQ */

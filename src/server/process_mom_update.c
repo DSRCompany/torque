@@ -347,8 +347,7 @@ struct pbsnode *get_node_from_str(
 
 
 
-
-int handle_auto_np(
+int handle_auto_np_val(
 
   struct pbsnode *np,  /* M */
   const char     *str) /* I */
@@ -356,9 +355,8 @@ int handle_auto_np(
   {
   pbs_attribute nattr;
   
-  /* first we decode str into nattr... + 6 is because str has format
-   * ncpus=X, and 6 = strlen(ncpus=) */  
-  if ((node_attr_def + ND_ATR_np)->at_decode(&nattr, ATTR_NODE_np, NULL, str + 6, 0) == 0)
+  /* first we decode str into nattr... */
+  if ((node_attr_def + ND_ATR_np)->at_decode(&nattr, ATTR_NODE_np, NULL, str, 0) == 0)
     {
     /* ... and if MOM's ncpus is different than our np... */
     if (nattr.at_val.at_long != np->nd_slots.get_total_execution_slots())
@@ -371,8 +369,20 @@ int handle_auto_np(
     }
 
   return(PBSE_NONE);
-  } /* END handle_auto_np() */
+  } /* END handle_auto_np_val() */
 
+
+
+
+int handle_auto_np(
+
+  struct pbsnode *np,  /* M */
+  const char     *str) /* I */
+
+  {
+  /* + 6 is because str has format ncpus=X, and 6 = strlen(ncpus=) */  
+  return handle_auto_np_val(np, str + 6);
+  } /* END handle_auto_np() */
 
 
 
@@ -503,7 +513,6 @@ int process_uname_str(
       } while (*cp != ' ' && count < PBS_MAXHOSTNAME);
     
     node_name[count-1] = 0;
-    cp = strdup(node_name);
     free(np->nd_name);
     np->nd_name = (char *)cp;
     np->nd_first = init_prop(np->nd_name);
@@ -518,7 +527,7 @@ int process_uname_str(
 
 
 
-int process_state_str(
+int process_state_str_val(
 
   struct pbsnode *np,
   const char    *str)
@@ -527,21 +536,21 @@ int process_state_str(
   char            log_buf[LOCAL_LOG_BUF_SIZE];
   int             rc = PBSE_NONE;
 
-  if (!strncmp(str, "state=down", 10))
+  if (!strncmp(str, "down", 10))
     {
     update_node_state(np, INUSE_DOWN);
     }
-  else if (!strncmp(str, "state=busy", 10))
+  else if (!strncmp(str, "busy", 10))
     {
     update_node_state(np, INUSE_BUSY);
     }
-  else if (!strncmp(str, "state=free", 10))
+  else if (!strncmp(str, "free", 10))
     {
     update_node_state(np, INUSE_FREE);
     }
   else
     {
-    sprintf(log_buf, "unknown %s from node %s",
+    sprintf(log_buf, "unknown state=%s from node %s",
       str,
       (np->nd_name != NULL) ? np->nd_name : "NULL");
     
@@ -552,7 +561,7 @@ int process_state_str(
   
   if (LOGLEVEL >= 9)
     {
-    sprintf(log_buf, "node '%s' is at state '0x%x'\n",
+    sprintf(log_buf, "node '%s' is at state '0x%x'",
       np->nd_name,
       np->nd_state);
     
@@ -561,6 +570,18 @@ int process_state_str(
   
   return(rc);
   } /* END process_state_str() */
+
+
+
+int process_state_str(
+
+  struct pbsnode *np,
+  const char     *str)
+
+  {
+  // str is "state=...". Call process value from the next char after '='
+  return process_state_str_val(np, str + 6);
+  }
 
 
 

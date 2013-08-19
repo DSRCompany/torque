@@ -765,7 +765,7 @@ void log_record(
   const char *text)       /* I */
 
   {
-  int tryagain = 2;
+  int tryagain;
   time_t now;
   pid_t  thr_id = -1;
 
@@ -843,6 +843,7 @@ void log_record(
     if (*end == '\r' && *(end + 1) == '\n')
       end++;
 
+    tryagain = 2;
     while (tryagain)
       {
       if (eventclass != PBS_EVENTCLASS_TRQAUTHD)

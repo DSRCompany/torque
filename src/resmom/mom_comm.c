@@ -174,6 +174,7 @@ extern time_t       LastServerUpdateTime;
 extern struct connection svr_conn[];
 #ifdef ZMQ
 std::map<std::string, Json::Value> received_json_statuses;
+extern char mom_alias[];
 #endif /* ZMQ */
 
 const char *PMOMCommand[] =
@@ -8868,7 +8869,7 @@ int mom_read_json_status(size_t sz, char *data)
   bool updated = false;
   for (auto node_status : body)
     {
-    std::string nodeId = node_status["node_id"].asString();
+    std::string nodeId = node_status["node"].asString();
     if (!nodeId.empty())
       {
       updated = true;
@@ -8906,6 +8907,7 @@ void update_my_json_status(char *status_strings)
 
   Json::Value my_status(Json::objectValue);
 
+  my_status["node"] = mom_alias;
   for (char *key_p = status_strings; key_p && *key_p; key_p += strlen(key_p) + 1)
     {
     // Split each key-value pair by '=' character and set Json values.
@@ -8920,8 +8922,15 @@ void update_my_json_status(char *status_strings)
     std::string key(key_p, val_p - key_p);
     val_p++; // Move beyond the '=' character
     my_status[key] = val_p;
+
+    if (LOGLEVEL >= 10)
+      {
+      sprintf(log_buffer, "my_status updated with %s = %s", key.c_str(), val_p);
+      log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+      }
     }
 
+    received_json_statuses[mom_alias] = my_status;
   } /* END update_my_json_status() */
 
 
@@ -8989,7 +8998,6 @@ std::string get_current_time()
 
 Json::Value create_default_json_header(enum message_type_e message_type)
   {
-  extern char mom_alias[];
   Json::Value root;
 
   root["messageId"] = generate_uuid();

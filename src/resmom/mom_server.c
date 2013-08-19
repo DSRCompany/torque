@@ -1403,7 +1403,6 @@ int zmq_send_status(
     log_err(-1, __func__, "ZeroMQ socket isn't initialized yet");
     }
 
-  update_my_json_status(status_string);
   msg_data = create_json_statuses_buffer();
 
   if (LOGLEVEL >= 9)
@@ -1414,15 +1413,35 @@ int zmq_send_status(
     }
 
   zmq_msg_t message;
-  zmq_msg_init_data (&message, msg_data, strlen(msg_data), delete_json_statuses_buffer, NULL);
+  zmq_msg_init_data(&message, msg_data, strlen(msg_data), delete_json_statuses_buffer, NULL);
 
-  rc = zmq_sendmsg (zsocket, &message, ZMQ_DONTWAIT);
-  if (rc != -1 && LOGLEVEL >= 7)
+  extern void *g_zmq_context;
+
+  test_msg(g_zmq_context, NULL, true, __func__);
+
+  rc = zmq_msg_send(&message, zsocket, ZMQ_DONTWAIT);
+  if (LOGLEVEL >= 10)
     {
-    snprintf(log_buffer, sizeof(log_buffer),
-        "Successfully sent status update to mom");
-    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER,__func__,log_buffer);
+    sprintf(log_buffer, "zmq_msg_send: rc=%d, errno=%d, socket=%p", rc, errno, zsocket);
+    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
     }
+
+  if (rc != -1)
+    {
+    if (LOGLEVEL >= 10)
+      {
+      snprintf(log_buffer, sizeof(log_buffer),
+          "Successfully sent status update");
+      log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER,__func__,log_buffer);
+      }
+    }
+  else
+    {
+    log_err(errno, __func__, "error sending status to the server");
+    }
+
+  zmq_msg_close(&message);
+
   return(rc);
   } /* END zmq_send_status() */
 
@@ -1617,16 +1636,26 @@ void mom_server_all_update_stat(void)
       }
     else /* !use_zmq */
       {
+      update_my_json_status(mom_status->str);
       rc = zmq_send_status(mom_status->str);
       if (rc < 0)
         {
-        update_status_connection();
-        rc = zmq_send_status(mom_status->str);
+        // Try to reconnect. Probably all MOMs are disappeared and the connection have to be
+        // directed to pbs servers.
+        rc = update_status_connection();
+        if (rc >= 0)
+          {
+          rc = zmq_send_status(mom_status->str);
+          }
         }
       if (rc >= 0)
         {
         LastServerUpdateTime = time_now;
         UpdateFailCount = 0;
+        }
+      else
+        {
+        UpdateFailCount++;
         }
       return;
       }
@@ -2172,7 +2201,6 @@ int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr
   char conn_url_buf[CONN_URL_LENGTH]; // Max length: "tcp://123.123.123.123:12345\0" = 28
   size_t printed_length;
   int rc;
-  extern struct zconnection_s g_svr_zconn[];
 
   if (sock_addr->sin_family != AF_INET)
     {
@@ -2184,14 +2212,42 @@ int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr
       "tcp://%s:%u", inet_ntoa(sock_addr->sin_addr), port);
   assert(printed_length < CONN_URL_LENGTH);
 
-  rc = zmq_connect(g_svr_zconn[id].socket, conn_url_buf);
-  if (rc)
+  void *zsocket = g_svr_zconn[id].socket;
+  rc = zmq_connect(zsocket, conn_url_buf);
+  if (LOGLEVEL >= 10)
+    {
+    sprintf(log_buffer, "connected: rc: %d, errno: %d, socket: %p, URL: %s", getpid(), pthread_self(), rc, errno, zsocket, conn_url_buf);
+    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+    }
+  if (rc == -1)
     {
     sprintf(log_buffer, "can't connect to the server %s", conn_url_buf);
     log_err(errno, __func__, log_buffer);
     }
+  else
+    {
+    if (LOGLEVEL >= 10)
+      {
+      sprintf(log_buffer, "connected to the server %s", conn_url_buf);
+      log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+      }
+    g_svr_zconn[id].connected = true;
+    }
 
   return(rc);
+  }
+
+
+int zmq_setopt_hwm(zmq_connection_e id, int value)
+  {
+  const size_t value_len = sizeof(value);
+
+  int rc = zmq_setsockopt(g_svr_zconn[ZMQ_STATUS_SEND].socket, ZMQ_SNDHWM, &value, value_len);
+  if (rc != 0)
+    {
+    rc = zmq_setsockopt(g_svr_zconn[ZMQ_STATUS_SEND].socket, ZMQ_RCVHWM, &value, value_len);
+    }
+  return rc;
   }
 
 
@@ -2211,6 +2267,7 @@ int update_status_connection()
     }
 
   close_zmq_connection(ZMQ_STATUS_SEND);
+  zmq_setopt_hwm(ZMQ_STATUS_SEND, 1);
 
   // Try to connect to all nodes of a level.
   nc = update_current_path(mh);
@@ -2225,7 +2282,7 @@ int update_status_connection()
         log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
         }
       rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr), PBS_MOM_STATUS_SERVICE_PORT);
-      if (!rc)
+      if (rc != -1) // Success
         {
         connected = true;
         }
@@ -2252,18 +2309,18 @@ int update_status_connection()
         log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
         }
       rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(mom_servers[i].sock_addr), PBS_STATUS_SERVICE_PORT);
-      if (!rc) // Success
+      if (rc != -1) // Success
         {
         connected = true;
         }
       }
     if (!connected)
       {
-      if (rc)
+      if (rc == -1) // Error
         {
         log_err(-1, __func__, "Could not contact any of the servers to send an update");
         }
-      else
+      else // Not connected but no one error detected
         {
         rc = NO_SERVER_CONFIGURED;
         }

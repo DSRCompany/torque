@@ -110,6 +110,10 @@
 #define END_GPU_STATUS         "</gpu_status>"
 #define START_MIC_STATUS       "<mic_status>"
 #define END_MIC_STATUS         "</mic_status>"
+#ifdef ZMQ
+#define GPU_STATUS_KEY         "gpu_status"
+#define MIC_STATUS_KEY         "mic_status"
+#endif /* ZMQ */
 
 #ifdef NUMA_SUPPORT
 #  define MAX_NODE_BOARDS      2048

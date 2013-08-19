@@ -106,6 +106,9 @@
 #ifdef ZMQ
 #include <zmq.h>
 #include <jsoncpp/json/json.h>
+#include <string>
+#include <sstream>
+#include <mutex_mgr.hpp>
 #endif /* ZMQ */
 #include "list_link.h"
 #include "work_task.h"
@@ -536,12 +539,374 @@ void *start_process_pbs_server_port(
 
 #ifdef ZMQ
 
+int gpu_entry_by_id(struct pbsnode *,const char *, int);
+int gpu_has_job(struct pbsnode *pnode, int gpuid);
+
+int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
+  {
+  pbs_attribute     temp;
+  std::string       tmp_value;
+  std::stringstream gpuinfo_stream;
+  unsigned int      startgpucnt;
+  int               rc;
+
+  if (LOGLEVEL >= 7)
+    {
+    sprintf(log_buffer, "received gpu status from node %s", (np != NULL) ? np->nd_name : "NULL");
+    log_record(PBSEVENT_SCHED, PBS_EVENTCLASS_REQUEST, __func__, log_buffer);
+    }
+
+  /* save current gpu count for node */
+  startgpucnt = np->nd_ngpus;
+
+  /*
+   *  Before filling the "temp" pbs_attribute, initialize it.
+   *  The second and third parameter to decode_arst are never
+   *  used, so just leave them empty. (GBS)
+   */
+  memset(&temp, 0, sizeof(temp));
+  rc = decode_arst(&temp, NULL, NULL, NULL, 0);
+  if (rc != PBSE_NONE)
+    {
+    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "cannot initialize attribute");
+    return(rc);
+    }
+
+  if (gpus_status.isNull() || !gpus_status.isArray())
+    {
+    return(DIS_NOCOMMIT);
+    }
+
+  for (auto gpu_status : gpus_status)
+    {
+    std::string gpuid;
+    int gpuidx = -1;
+    int drv_ver;
+
+    /* add the info to the "temp" attribute */
+
+    /* get gpuid */
+    gpuid = gpu_status["gpuid"].asString();
+    if (gpuid.empty())
+      {
+      if (LOGLEVEL >= 3)
+        {
+        sprintf(log_buffer,
+            "Failed to get/create entry for gpu without gpuid specified on node %s\n",
+            np->nd_name);
+
+        log_ext(-1, __func__, log_buffer, LOG_DEBUG);
+        }
+
+      free_arst(&temp);
+      return(DIS_NOCOMMIT);
+      }
+
+    /*
+     * Get this gpus index, if it does not yet exist then find an empty entry.
+     * We need to allow for the gpu status results being returned in
+     * different orders since the nvidia order may change upon mom's reboot
+     */
+    gpuidx = gpu_entry_by_id(np, gpuid.c_str(), TRUE);
+    if (gpuidx == -1)
+      {
+      /*
+       * Failure - we could not get / create a nd_gpusn entry for this gpu,
+       * log an error message.
+       */
+
+      if (LOGLEVEL >= 3)
+        {
+        sprintf(log_buffer,
+            "Failed to get/create entry for gpu %s on node %s\n",
+            gpuid.c_str(),
+            np->nd_name);
+
+        log_ext(-1, __func__, log_buffer, LOG_DEBUG);
+        }
+
+      free_arst(&temp);
+
+      return(DIS_SUCCESS);
+      }
+
+    gpuinfo_stream << "gpu[" << gpuidx << "]=gpu_id=" << gpuid;
+    /*
+     * if we have not filled in the gpu_id returned by the mom node
+     * then fill it in
+     */
+    if ((gpuidx >= 0) && (np->nd_gpusn[gpuidx].gpuid == NULL))
+      {
+      np->nd_gpusn[gpuidx].gpuid = strdup(gpuid.c_str());
+      }      
+
+    /* get timestamp */
+    tmp_value = gpu_status["timestamp"].asString();
+    if (!tmp_value.empty())
+      {
+      gpuinfo_stream << ";timestamp=" << tmp_value;
+      }
+
+    /* get driver version, if there is one */
+    drv_ver = gpu_status["driver_ver"].asInt();
+    if (!tmp_value.empty())
+      {
+      gpuinfo_stream << ";driver_ver=" << drv_ver;
+
+      np->nd_gpusn[gpuidx].driver_ver = drv_ver;
+      }
+
+    tmp_value = gpu_status["gpu_mode"].asString();
+    if (!tmp_value.empty())
+      {
+      if (!tmp_value.compare("Normal") || !tmp_value.compare("Default"))
+        {
+        np->nd_gpusn[gpuidx].mode = gpu_normal;
+        if (gpu_has_job(np, gpuidx))
+          {
+          np->nd_gpusn[gpuidx].state = gpu_shared;
+          }
+        else
+          {
+          np->nd_gpusn[gpuidx].inuse = 0;
+          np->nd_gpusn[gpuidx].state = gpu_unallocated;
+          }
+        }
+      else if (!tmp_value.compare("Exclusive") ||
+              !tmp_value.compare("Exclusive_Thread"))
+        {
+        np->nd_gpusn[gpuidx].mode = gpu_exclusive_thread;
+        if (gpu_has_job(np, gpuidx))
+          {
+          np->nd_gpusn[gpuidx].state = gpu_exclusive;
+          }
+        else
+          {
+          np->nd_gpusn[gpuidx].inuse = 0;
+          np->nd_gpusn[gpuidx].state = gpu_unallocated;
+          }
+        }
+      else if (!tmp_value.compare("Exclusive_Process"))
+        {
+        np->nd_gpusn[gpuidx].mode = gpu_exclusive_process;
+        if (gpu_has_job(np, gpuidx))
+          {
+          np->nd_gpusn[gpuidx].state = gpu_exclusive;
+          }
+        else
+          {
+          np->nd_gpusn[gpuidx].inuse = 0;
+          np->nd_gpusn[gpuidx].state = gpu_unallocated;
+          }
+        }
+      else if (!tmp_value.compare("Prohibited"))
+        {
+        np->nd_gpusn[gpuidx].mode = gpu_prohibited;
+        np->nd_gpusn[gpuidx].state = gpu_unavailable;
+        }
+      else
+        {
+        /* unknown mode, default to prohibited */
+        np->nd_gpusn[gpuidx].mode = gpu_prohibited;
+        np->nd_gpusn[gpuidx].state = gpu_unavailable;
+        if (LOGLEVEL >= 3)
+          {
+          sprintf(log_buffer,
+            "GPU %s has unknown mode on node %s",
+            gpuid.c_str(),
+            np->nd_name);
+
+          log_ext(-1, __func__, log_buffer, LOG_DEBUG);
+          }
+        }
+
+      /* add gpu_mode so it gets added to the pbs_attribute */
+      gpuinfo_stream << ";gpu_state=";
+      switch (np->nd_gpusn[gpuidx].state)
+        {
+        case gpu_unallocated:
+          gpuinfo_stream << "Unallocated";
+          break;
+        case gpu_shared:
+          gpuinfo_stream << "Shared";
+          break;
+        case gpu_exclusive:
+          gpuinfo_stream << "Exclusive";
+          break;
+        case gpu_unavailable:
+          gpuinfo_stream << "Unavailable";
+          break;
+        }
+      }
+
+    if (decode_arst(&temp, NULL, NULL, gpuinfo_stream.str().c_str(), 0))
+      {
+      DBPRT(("is_gpustat_get: cannot add attributes\n"));
+
+      free_arst(&temp);
+
+      return(DIS_NOCOMMIT);
+      }
+
+    /* reset the gpuinfo stream for the next iteration */
+    gpuinfo_stream.str("");
+    gpuinfo_stream.clear();
+    
+    /* mark that this gpu node is not virtual */
+    np->nd_gpus_real = TRUE;
+    } /* END of for (auto gpu_status : gpus_status) */
+
+  /* maintain the gpu count, if it has changed we need to update the nodes file */
+
+  if (gpus_status.size() != startgpucnt)
+    {
+    np->nd_ngpus = gpus_status.size();
+
+    /* update the nodes file */
+    update_nodes_file(np);
+    }
+
+  node_gpustatus_list(&temp, np, ATR_ACTION_ALTER);
+
+  return(DIS_SUCCESS);
+  }  /* END pbs_read_json_gpu_status() */
+
+
+
+int save_single_mic_status(dynamic_string *single_mic_status, pbs_attribute *temp);
+
+int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
+  {
+  /* TODO: Implement. See process_mic_status() */
+  pbs_attribute     temp;
+  std::string       tmp_value;
+  std::stringstream micinfo_stream;
+  int               mic_count = 0;
+  int               rc = PBSE_NONE;
+
+  if (LOGLEVEL >= 7)
+    {
+    sprintf(log_buffer, "received mic status from node %s", (np != NULL) ? np->nd_name : "NULL");
+    log_record(PBSEVENT_SCHED, PBS_EVENTCLASS_REQUEST, __func__, log_buffer);
+    }
+
+  /*
+   *  Before filling the "temp" pbs_attribute, initialize it.
+   *  The second and third parameter to decode_arst are never
+   *  used, so just leave them empty. (GBS)
+   */
+  memset(&temp, 0, sizeof(temp));
+  rc = decode_arst(&temp, NULL, NULL, NULL, 0);
+  if (rc != PBSE_NONE)
+    {
+    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "cannot initialize attribute");
+    return(rc);
+    }
+
+  if (mics_status.isNull() || !mics_status.isArray())
+    {
+    return(DIS_NOCOMMIT);
+    }
+
+  for (auto mic_status : mics_status)
+    {
+    std::string micid;
+
+    /* add the info to the "temp" attribute */
+
+    /* get micid */
+    micid = mic_status["micid"].asString();
+    if (micid.empty())
+      {
+      if (LOGLEVEL >= 3)
+        {
+        sprintf(log_buffer,
+            "Failed to get/create entry for mic without micid specified on node %s\n",
+            np->nd_name);
+
+        log_ext(-1, __func__, log_buffer, LOG_DEBUG);
+        }
+
+      free_arst(&temp);
+      return(DIS_NOCOMMIT);
+      }
+
+    micinfo_stream << "mic[" << mic_count << "]=" << micid;
+
+    // Print all other mic status values
+    for (auto key : mic_status.getMemberNames())
+      {
+      if (key.compare("micid"))
+        {
+        continue;
+        }
+      micinfo_stream << ';' << key << '=' << mic_status[key].asString();
+      }
+
+    rc = decode_arst(&temp, NULL, NULL, micinfo_stream.str().c_str(), 0);
+    if (rc != PBSE_NONE)
+      {
+      log_err(ENOMEM, __func__, "error decoding mic status");
+      free_arst(&temp);
+      break;
+      }
+
+    mic_count++;
+
+    /* reset the micinfo stream for the next iteration */
+    micinfo_stream.str("");
+    micinfo_stream.clear();
+    
+    } /* END of for (auto gpu_status : gpus_status) */
+
+  if (mic_count > np->nd_nmics)
+    {
+    np->nd_nmics_free += mic_count - np->nd_nmics;
+    np->nd_nmics = mic_count;
+
+    if (mic_count > np->nd_nmics_alloced)
+      {
+      struct jobinfo *tmp = (struct jobinfo *)calloc(mic_count, sizeof(struct jobinfo));
+
+      if (tmp == NULL)
+        return(ENOMEM);
+
+      memcpy(tmp, np->nd_micjobs, sizeof(struct jobinfo) * np->nd_nmics_alloced);
+      free(np->nd_micjobs);
+      np->nd_micjobs = tmp;
+
+      np->nd_nmics_alloced = mic_count;
+      }
+    }
+
+  node_micstatus_list(&temp, np, ATR_ACTION_ALTER);
+
+  return(rc);
+  }
+
+
+
+void clear_nvidia_gpus(struct pbsnode *np);
+int process_state_str_val(struct pbsnode *np, const char *str);
+int process_uname_str(struct pbsnode *np, const char *str);
+int handle_auto_np_val(struct pbsnode *np, const char *str);
+int save_node_status(struct pbsnode *current, pbs_attribute *temp);
+
 int pbs_read_json_status(size_t sz, char *data)
   {
-  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-      "Reading of status");
+  long              mom_job_sync = 0;
+  long              auto_np = 0;
+  long              down_on_error = 0;
+  bool              send_hello = false;
+  Json::Value       root;
+  Json::Reader      reader;
+  std::stringstream status_stream;
 
-  printf("pbs_read_json_status\n\n");
+  if (LOGLEVEL >= 10)
+    {
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+      "Reading of JSON status");
+    }
 
   if (sz <= 0 || !data)
     {
@@ -549,18 +914,18 @@ int pbs_read_json_status(size_t sz, char *data)
     }
 
   // read
-  Json::Value root;
-  Json::Reader reader;
   bool parsingSuccessful = reader.parse(data, data + sz - 1, root, false);
   if ( !parsingSuccessful )
     {
     // Can't read the message. Malformed?
+    log_err(-1, __func__, "malformed Json message received");
     return -1;
     }
 
   if (root["messageType"].asString() != "status")
     {
     // There is no 'messageType' key in the message
+    log_err(-1, __func__, "non-status message received");
     return -1;
     }
 
@@ -569,164 +934,259 @@ int pbs_read_json_status(size_t sz, char *data)
   if (!body.isArray())
     {
     // Body have to be an array of nodes statuses
+    log_err(-1, __func__, "status message containg no body");
     return -1;
     }
 
+  get_svr_attr_l(SRV_ATR_MomJobSync, &mom_job_sync);
+  get_svr_attr_l(SRV_ATR_AutoNodeNP, &auto_np);
+  get_svr_attr_l(SRV_ATR_DownOnError, &down_on_error);
+
   for (auto node_status : body)
     {
-    std::string nodeId = node_status["nodeId"].asString();
-    if (!nodeId.empty())
+    pbs_attribute temp;
+    Json::Value temp_value;
+    bool dont_change_state = false;
+
+    std::string nodeId = node_status["node"].asString();
+    if (nodeId.empty())
       {
-        struct pbsnode *current = find_nodebyname(nodeId.c_str());
-        if(current == NULL)
+      log_err(-1, __func__, "received a status without node id specified. Ignored");
+      continue;
+      }
+
+    struct pbsnode *current = find_nodebyname(nodeId.c_str());
+    if(current == NULL)
+      {
+      // TODO: Check is the node trusted and create an entinty for the node if not found.
+      //       See svr_is_request() code.
+      sprintf(log_buffer, "the node with id '%s' not found. Ignored", nodeId.c_str());
+      log_err(-1, __func__, log_buffer);
+      continue;
+      }
+
+    mutex_mgr node_mutex(current->nd_mutex, true);
+
+    if (LOGLEVEL >= 10)
+      {
+      snprintf(log_buffer, LOCAL_LOG_BUF_SIZE, "handle status for node '%s'", nodeId.c_str());
+      log_event(PBSEVENT_ADMIN,PBS_EVENTCLASS_SERVER,__func__,log_buffer);
+      }
+
+    temp_value = node_status[GPU_STATUS_KEY];
+    if (!temp_value.isNull())
+      {
+      pbs_read_json_gpu_status(current, temp_value);
+      }
+
+    temp_value = node_status[MIC_STATUS_KEY];
+    if (!temp_value.isNull())
+      {
+      pbs_read_json_mic_status(current, temp_value);
+      }
+
+    if (node_status["first_update"].asBool())
+      {
+      if (LOGLEVEL >= 10)
+        {
+        log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+            ("status: first_update = "+node_status["first_update"].asString()).c_str());
+        }
+
+      /* mom is requesting that we send the mom hierarchy file to her */
+      remove_hello(&hellos, current->nd_name);
+      send_hello = true;
+
+      /* reset gpu data in case mom reconnects with changed gpus */
+      clear_nvidia_gpus(current);
+      }
+
+    if (current->nd_mom_reported_down)
+      {
+      dont_change_state = true;
+      }
+
+    temp_value = node_status["message"];
+    if (!temp_value.isNull())
+      {
+      if (!temp_value.asString().compare("ERROR") && down_on_error)
+        {
+        update_node_state(current, INUSE_DOWN);
+        dont_change_state = true;
+        }
+      status_stream << "message=" << temp_value.asString() << ";";
+      }
+
+    temp_value = node_status["state"].asString();
+    if (!temp_value.isNull())
+      {
+      if (!dont_change_state)
+        {
+        process_state_str_val(current, temp_value.asCString());
+        }
+      }
+
+    temp_value = node_status["uname"];
+    if (!temp_value.isNull())
+      {
+      if (allow_any_mom)
+        {
+        process_uname_str(current, temp_value.asCString());
+        }
+      status_stream << "uname=" << temp_value.asString() << ";";
+      }
+
+    temp_value = node_status["jobdata"];
+    if (!temp_value.isNull())
+      {
+      if (mom_job_sync)
+        {
+        update_job_data(current, temp_value.asCString());
+        }
+      status_stream << "jobdata=" << temp_value.asString() << ";";
+      }
+
+    temp_value = node_status["jobs"];
+    if (!temp_value.isNull())
+      {
+      std::string value = temp_value.asString();
+      if (mom_job_sync)
+        {
+        size_t len = value.length() + strlen(current->nd_name) + 2;
+        char *jobstr = (char *)calloc(1, len);
+        sync_job_info *sji = (sync_job_info *)calloc(1, sizeof(sync_job_info));
+
+        if (jobstr == NULL || sji == NULL)
           {
-            // TODO: create new node
+          if (jobstr)
+            {
+            free(jobstr);
+            jobstr = NULL;
+            }
+          if (sji != NULL)
+            {
+            free(sji);
+            sji = NULL;
+            }
           }
         else
           {
-            if(node_status["firstUpdate"].asBool())
-            {
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: firstUpdate = "+node_status["firstUpdate"].asString()).c_str());
-/*
-              remove_hello(&hellos, current->nd_name);
-              send_hello = TRUE;
-              clear_nvidia_gpus(current);
-*/
-            }
-            if(!node_status["availMem"].isNull())
-            {
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: availMem = "+node_status["availMem"].asString()).c_str());
-              // node_status["availMem"].asUInt();
-            }
-            if(!node_status["idleTime"].isNull())
-            {
-              // node_status["idleTime"].asUInt();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: idleTime = "+node_status["idleTime"].asString()).c_str());
-            }
-            if(!node_status["nCpus"].isNull())
-            {
-              extern int handle_auto_np(struct pbsnode *np, char *str);
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: nCpus = "+node_status["nCpus"].asString()).c_str());
-              handle_auto_np(current, (char*)node_status["nCpus"].asString().c_str());
-            }
-            if(!node_status["netLoad"].isNull())
-            {
-              // node_status["netLoad"].asUInt();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: netLoad = "+node_status["netLoad"].asString()).c_str());
-            }
-            if(!node_status["nSessions"].isNull())
-            {
-              // node_status["nSessions"].asUInt();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: nSessions = "+node_status["nSessions"].asString()).c_str());
-            }
-            if(!node_status["nUsers"].isNull())
-            {
-              // node_status["nUsers"].asUInt();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: nUsers = "+node_status["nUsers"].asString()).c_str());
-            }
-            if(!node_status["totMem"].isNull())
-            {
-              // node_status["totMem"].asUInt();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: totMem = "+node_status["totMem"].asString()).c_str());
-            }
-            if(!node_status["physMem"].isNull())
-            {
-              // node_status["physMem"].asUInt();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: physMem = "+node_status["physMem"].asString()).c_str());
-            }
-            if(!node_status["state"].isNull())
-            {
-              extern int process_state_str(struct pbsnode *np, char *str);
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: state = "+node_status["state"].asString()).c_str());
-              process_state_str(current, (char*)("state="+node_status["state"].asString()).c_str());
-            }
-            if(!node_status["uName"].isNull())
-            {
-              extern int process_uname_str(struct pbsnode *np, char *str);
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: uName = "+node_status["uName"].asString()).c_str());
-              process_uname_str(current, (char*)node_status["uName"].asString().c_str());
-            }
-            if(!node_status["loadAve"].isNull())
-            {
-              // node_status["loadAve"].asDouble();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: loadAve = "+node_status["loadAve"].asString()).c_str());
-            }
-            if(!node_status["opSys"].isNull())
-            {
-              // node_status["opSys"].asString();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: opSys = "+node_status["opSys"].asString()).c_str());
-            }
-            if(!node_status["gRes"].isNull())
-            {
-              // node_status["gRes"].asString();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: gRes = "+node_status["gRes"].asString()).c_str());
-            }
-            if(!node_status["varAttr"].isNull())
-            {
-              // node_status["varAttr"].asString();
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: varAttr = "+node_status["varAttr"].asString()).c_str());
-            }
-            if(node_status["sessions"].isArray())
-            {
-              // node_status["sessions"]
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: sessions = "+node_status["sessions"].asString()).c_str());
-            }
-            if(node_status["jobs"].isArray())
-            {
-              // node_status["jobs"]
-              log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-                         ("status: jobs = "+node_status["jobs"].asString()).c_str());
-              // walk job list reported by mom
-/*
-              size_t         len = strlen(str) + strlen(current->nd_name) + 2;
-              char          *jobstr = (char *)calloc(1, len);
-              sync_job_info *sji = (sync_job_info *)calloc(1, sizeof(sync_job_info));
+          snprintf(jobstr, len, "%s:%s", current->nd_name, value.c_str());
+          sji->input = jobstr;
+          sji->timestamp = time(NULL);
 
-              if ((jobstr != NULL) &&
-                  (sji != NULL))
-              {
-                sprintf(jobstr, "%s:%s", current->nd_name, str+5);
-                sji->input = jobstr;
-                sji->timestamp = time(NULL);
-
-                // sji must be freed in sync_node_jobs
-                enqueue_threadpool_request(sync_node_jobs, sji);
-              }
-              else
-              {
-                if (jobstr != NULL)
-                {
-                  free(jobstr);
-                }
-                if (sji != NULL)
-                {
-                  free(sji);
-                }
-              }
-*/
-            }
+          /* sji must be freed in sync_node_jobs */
+          enqueue_threadpool_request(sync_node_jobs, sji);
           }
+        }
+      status_stream << "jobs=" << temp_value.asString() << ";";
       }
+
+    temp_value = node_status["ncpus"];
+    if (!temp_value.isNull())
+      {
+      handle_auto_np_val(current, temp_value.asCString());
+      status_stream << "ncpus=" << temp_value.asString() << ";";
+      }
+
+    if(!node_status["availmem"].isNull())
+      {
+      status_stream << "availmem=" << temp_value.asString() << ";";
+      }
+
+    if(!node_status["idletime"].isNull())
+      {
+      status_stream << "idletime=" << temp_value.asString() << ";";
+      }
+
+    if(!node_status["netload"].isNull())
+      {
+      status_stream << "netload=" << temp_value.asString() << ";";
+      }
+    
+    if(!node_status["nsessions"].isNull())
+      {
+      status_stream << "nsessions=" << temp_value.asString() << ";";
+      }
+
+    if(!node_status["nusers"].isNull())
+      {
+      status_stream << "nusers=" << temp_value.asString() << ";";
+      }
+
+    if(!node_status["totmem"].isNull())
+      {
+      status_stream << "totmem=" << temp_value.asString() << ";";
+      }
+
+    if(!node_status["physmem"].isNull())
+      {
+      status_stream << "physmem=" << temp_value.asString() << ";";
+      }
+
+    if(!node_status["loadave"].isNull())
+      {
+      status_stream << "loadave=" << temp_value.asString() << ";";
+      }
+    
+    if(!node_status["opsys"].isNull())
+      {
+      status_stream << "opsys=" << temp_value.asString() << ";";
+      }
+
+    if(!node_status["gres"].isNull())
+      {
+      status_stream << "gres=" << temp_value.asString() << ";";
+      }
+
+    if(!node_status["varattr"].isNull())
+      {
+      status_stream << "varattr=" << temp_value.asString() << ";";
+      }
+
+    if(node_status["sessions"].isArray())
+      {
+      status_stream << "sessions=" << temp_value.asString() << ";";
+      }
+
+    if (status_stream.rdbuf()->in_avail())
+      {
+      memset(&temp, 0, sizeof(temp));
+      if (decode_arst(&temp, NULL, NULL, NULL, 0) != PBSE_NONE)
+        {
+        log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "cannot initialize attribute");
+        }
+      else
+        {
+        // Put collected values into the temp attribute
+        if (decode_arst(&temp, NULL, NULL, status_stream.str().c_str(), 0))
+          {
+          DBPRT(("mom_read_json_status: cannot add attributes\n"));
+          free_arst(&temp);
+          }
+        else
+          {
+          save_node_status(current, &temp);
+          }
+        }
+
+      /* reset the status_stream for the next iteration */
+      status_stream.str("");
+      status_stream.clear();
+      }
+
+    node_mutex.unlock();
     }
 
-  return(PBSE_NONE);
+  if (send_hello)
+    {
+    return(SEND_HELLO);
+    }
+
+  return(DIS_SUCCESS);
   } /* END mom_read_json_status() */
+
+
 
 void *start_process_pbs_status_port(
   void *zsock)
@@ -744,6 +1204,12 @@ void *start_process_pbs_status_port(
   while(true)
     {
     int rc = 0;
+
+    if (LOGLEVEL >= 10)
+      {
+      log_record( PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__,
+          "Processing status port iteration");
+      }
 
     rc = zmq_msg_init(&part);
     if (rc != 0)
@@ -793,12 +1259,20 @@ void *start_process_pbs_status_port(
       // Process the message
       if (msg_part_number == 0)
         {
-        printf("ZMQ Message Sender ID: %.*s\n", (int)sz, (char *)data);
+        if (LOGLEVEL >= 10)
+          {
+          sprintf(log_buffer, "ZMQ Message Sender ID: %.*s", (int)sz, (char *)data);
+          log_record( PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
+          }
         }
       else
         {
-        printf("ZMQ Message Data: %.*s\n", (int)sz, (char *)data);
-        pbs_read_json_status(sz, (char *)data);
+        if (LOGLEVEL >= 10)
+          {
+          sprintf(log_buffer, "ZMQ Message Data: %.*s", (int)sz, (char *)data);
+          log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
+          }
+        rc = pbs_read_json_status(sz, (char *)data);
         }
       }
 
@@ -831,6 +1305,11 @@ void *process_pbs_status_port_thread(
 {
   while(true)
     {
+    if (LOGLEVEL >= 10)
+      {
+      log_record( PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__,
+          "Processing status port thread iteration\n");
+      }
     start_process_pbs_status_port(zsock);
     }
   return NULL;
@@ -2422,7 +2901,6 @@ int main(
     {
     char endpoint[32];
     sprintf(endpoint, "tcp://*:%d", pbs_status_port);
-    printf("init_znetwork\n\n");
     if (init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, start_process_pbs_status_port, ZMQ_ROUTER) != 0)
       {
       perror("pbs_server: ZeroMQ socket");
