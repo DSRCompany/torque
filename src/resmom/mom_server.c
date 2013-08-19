@@ -2234,6 +2234,7 @@ int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr
   }
 
 
+
 int zmq_setopt_hwm(zmq_connection_e id, int value)
   {
   const size_t value_len = sizeof(value);
@@ -2277,7 +2278,13 @@ int update_status_connection()
         sprintf(log_buffer, "Connecting to node %s", nc->name);
         log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
         }
-      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr), PBS_MOM_STATUS_SERVICE_PORT);
+      // FIXME: Temporary workaround for the non-standard connection port numbers:
+      //        Calculate the ZMQ port number as generic tcp socket port plus difference between
+      //        predefined values.
+      //        In the future it have to be configurable as it done for generic tcp sockets ports.
+      unsigned int port = nc->sock_addr.sin_port
+        + (PBS_MOM_STATUS_SERVICE_PORT - PBS_MANAGER_SERVICE_PORT);
+      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr), port);
       if (rc != -1) // Success
         {
         connected = true;
@@ -2304,7 +2311,13 @@ int update_status_connection()
         sprintf(log_buffer, "Connecting to pbs server %s", mom_servers[i].pbs_servername);
         log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
         }
-      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(mom_servers[i].sock_addr), PBS_STATUS_SERVICE_PORT);
+      // FIXME: Temporary workaround for the non-standard connection port numbers:
+      //        Calculate the ZMQ port number as generic tcp socket port plus difference between
+      //        predefined values.
+      //        In the future it have to be configurable as it done for generic tcp sockets ports.
+      unsigned int port = nc->sock_addr.sin_port
+        + (PBS_STATUS_SERVICE_PORT - PBS_BATCH_SERVICE_PORT);
+      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(mom_servers[i].sock_addr), port);
       if (rc != -1) // Success
         {
         connected = true;
