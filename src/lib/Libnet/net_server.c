@@ -131,7 +131,6 @@
 char   local_host_name[PBS_MAXHOSTNAME + 1];
 size_t local_host_name_len = PBS_MAXHOSTNAME;
 
-extern int  LOGLEVEL;
 extern char local_host_name[];
 
 /* External Functions Called */
@@ -162,7 +161,7 @@ struct connection svr_conn[PBS_NET_MAX_CONNECTIONS];
 void  *g_zmq_context = NULL;
 
 /* Table containing all ZeroMQ connections */
-struct zconnection_s g_svr_zconn[ZMQ_CONNECTION_COUNT] = { 0 };
+struct zconnection_s g_svr_zconn[ZMQ_CONNECTION_COUNT] = {};
 
 /* Pointer to the array containing items to be polled */
 static zmq_pollitem_t *gs_zmq_poll_list = NULL;
@@ -524,11 +523,6 @@ int deinit_zmq_socket(void *socket)
     log_err(errno, __func__, "can't set LINGER option to ZMQ socket");
     }
   rc = zmq_close(socket);
-  if (LOGLEVEL >= 10)
-    {
-    sprintf(log_buffer, "closed zsocket: rc=%d, errno=%d, socket=%p", rc, errno, socket);
-    log_record(0, 0, __func__, log_buffer);
-    }
 
   if (rc)
     {
@@ -553,12 +547,6 @@ int init_zmq()
 
   g_zmq_context = zmq_ctx_new();
 
-  if (LOGLEVEL >= 10)
-    {
-    sprintf(log_buffer, "ZMQ context created: rc=--, errno=%d", errno);
-    log_record(0, 0, __func__, log_buffer);
-    }
-
   return g_zmq_context ? 0 : -1;
   }
 
@@ -572,11 +560,6 @@ void deinit_zmq()
   void *socket = NULL;
   int i;
 
-  if (LOGLEVEL >= 10)
-    {
-    log_record(PBSEVENT_SYSTEM, 0, __func__, "entered");
-    }
-
   // Close all sockets
   for (i = 0; i < ZMQ_CONNECTION_COUNT; i++)
     {
@@ -585,30 +568,14 @@ void deinit_zmq()
       continue;
     }
 
-    int rc = deinit_zmq_socket(socket);
-    if (LOGLEVEL >= 10)
-      {
-      sprintf(log_buffer, "deinit zsocket: rc=%d, errno=%d, socket=%p", rc, errno, socket);
-      log_record(0, 0, __func__, log_buffer);
-      }
+    deinit_zmq_socket(socket);
     }
 
   // Destroy ZMQ context
   zmq_ctx_destroy(g_zmq_context);
 
-  if (LOGLEVEL >= 10)
-    {
-    sprintf(log_buffer, "zmq context destroyed: rc=--, errno=%d", errno);
-    log_record(0, 0, __func__, log_buffer);
-    }
-
   // Dealloc global data structures
   free(gs_zmq_poll_list);
-
-  if (LOGLEVEL >= 10)
-    {
-    log_record(PBSEVENT_SYSTEM, 0, __func__, "returned");
-    }
   }
 
 
@@ -637,12 +604,6 @@ int init_znetwork(
     }
 
   socket = zmq_socket(g_zmq_context, socket_type);
-  if (LOGLEVEL >= 10)
-    {
-    sprintf(log_buffer, "created zsocket: rc=--, errno=%d, socket=%p",
-        errno, socket);
-    log_record(0, 0, __func__, log_buffer);
-    }
 
   if (!socket) {
     log_err(errno, __func__, "unable to create a socket");
@@ -681,12 +642,6 @@ int init_zmq_connection(
     }
 
   void *socket = zmq_socket(g_zmq_context, socket_type);
-  if (LOGLEVEL >= 10)
-    {
-    sprintf(log_buffer, "created socket: rc=--, errno=%d, socket=%p", errno, socket);
-    log_record(0, 0, __func__, log_buffer);
-    }
-
   if (!socket)
     {
     log_err(errno, __func__, "unable to create a socket");
@@ -731,11 +686,6 @@ int close_zmq_connection(
     return -1;
     }
   rc = deinit_zmq_socket(socket);
-  if (LOGLEVEL >= 10)
-    {
-    sprintf(log_buffer, "deinited zsocket: rc=%d, errno=%d, socket=%p", rc, errno, socket);
-    log_record(0, 0, __func__, log_buffer);
-    }
 
   if (rc)
     {
@@ -744,11 +694,6 @@ int close_zmq_connection(
     }
 
   socket = zmq_socket(g_zmq_context, socket_type);
-  if (LOGLEVEL >= 10)
-    {
-    sprintf(log_buffer, "created socket: rc=--, errno=%d, socket=%p" errno, socket);
-    log_record(0, 0, __func__, log_buffer);
-    }
 
   if (!socket)
     {

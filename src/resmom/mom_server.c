@@ -1415,10 +1415,6 @@ int zmq_send_status(
   zmq_msg_t message;
   zmq_msg_init_data(&message, msg_data, strlen(msg_data), delete_json_statuses_buffer, NULL);
 
-  extern void *g_zmq_context;
-
-  test_msg(g_zmq_context, NULL, true, __func__);
-
   rc = zmq_msg_send(&message, zsocket, ZMQ_DONTWAIT);
   if (LOGLEVEL >= 10)
     {
@@ -2216,7 +2212,7 @@ int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr
   rc = zmq_connect(zsocket, conn_url_buf);
   if (LOGLEVEL >= 10)
     {
-    sprintf(log_buffer, "connected: rc: %d, errno: %d, socket: %p, URL: %s", getpid(), pthread_self(), rc, errno, zsocket, conn_url_buf);
+    sprintf(log_buffer, "connected: rc: %d, errno: %d, socket: %p, URL: %s", rc, errno, zsocket, conn_url_buf);
     log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
     }
   if (rc == -1)
