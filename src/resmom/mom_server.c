@@ -2282,7 +2282,7 @@ int update_status_connection()
       //        Calculate the ZMQ port number as generic tcp socket port plus difference between
       //        predefined values.
       //        In the future it have to be configurable as it done for generic tcp sockets ports.
-      unsigned int port = nc->sock_addr.sin_port
+      unsigned int port = ntohs(nc->sock_addr.sin_port)
         + (PBS_MOM_STATUS_SERVICE_PORT - PBS_MANAGER_SERVICE_PORT);
       rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr), port);
       if (rc != -1) // Success
@@ -2315,7 +2315,7 @@ int update_status_connection()
       //        Calculate the ZMQ port number as generic tcp socket port plus difference between
       //        predefined values.
       //        In the future it have to be configurable as it done for generic tcp sockets ports.
-      unsigned int port = mom_servers[i].sock_addr.sin_port
+      unsigned int port = ntohs(mom_servers[i].sock_addr.sin_port)
         + (PBS_STATUS_SERVICE_PORT - PBS_BATCH_SERVICE_PORT);
       rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(mom_servers[i].sock_addr), port);
       if (rc != -1) // Success
