@@ -157,22 +157,38 @@ struct connection svr_conn[PBS_NET_MAX_CONNECTIONS];
  * ZeroMQ related data structures
  */
 
-/* Pointer to ZeroMQ context */
+/**
+ * Global pointer to a ZeroMQ context.
+ */
 void  *g_zmq_context = NULL;
 
-/* Table containing all ZeroMQ connections */
+/**
+ * Table containing all ZeroMQ connections
+ */
 struct zconnection_s g_svr_zconn[ZMQ_CONNECTION_COUNT] = {};
 
-/* Pointer to the array containing items to be polled */
+/**
+ * Pointer to the array containing items to be polled
+ */
 static zmq_pollitem_t *gs_zmq_poll_list = NULL;
 
-/* Poll array size */
+/**
+ * Poll array size
+ */
 static int             gs_zmq_poll_size = 0;
 
-void start_socket_thread(int sock, void*(*func)(void*))
+
+
+/**
+ * A helper executing the given function in a new thread passing a socket with the given ID to the
+ * function as an argument.
+ * @param id the ID of a socket argument
+ * @param func the function to be executed in a new thread
+ */
+void start_socket_thread(int id, void*(*func)(void*))
 {
   pthread_t thr;
-  pthread_create(&thr, NULL, func, g_svr_zconn[sock].socket);
+  pthread_create(&thr, NULL, func, g_svr_zconn[id].socket);
 }
 
 #endif /* ZMQ */
@@ -509,9 +525,10 @@ int init_network(
 
 #ifdef ZMQ
 
-/*
- * Deinitialize ZeroMQ socket.
- * The socket haven't be used after this call.
+/**
+ * Deinitialize ZeroMQ socket. The socket have not be used after this call.
+ * @param socket the socket to be closed.
+ * @return 0 if operation succeeded or -1 otherwise.
  */
 int deinit_zmq_socket(void *socket)
   {
@@ -533,8 +550,9 @@ int deinit_zmq_socket(void *socket)
 
 
 
-/*
- * Initialize ZeroMQ related global data structures
+/**
+ * Initialize ZeroMQ related global data structures. Have to be called once per program execution.
+ * @return 0 if operation succeeded or -1 otherwise.
  */
 int init_zmq()
   {
@@ -552,8 +570,9 @@ int init_zmq()
 
 
 
-/*
- * Deinitialize ZeroMQ related global data structures
+/**
+ * Deinitialize ZeroMQ related global data structures. Have to be called once at the program
+ * shutdown.
  */
 void deinit_zmq()
   {
@@ -581,17 +600,21 @@ void deinit_zmq()
 
 
 /**
- * Create ZeroMQ listening (server side) socket of the spcified socket_type.
+ * Create ZeroMQ listening (server side) socket of the specified socket_type.
  * Bind the socket to the specified endpoint.
  * Place the socket and the specified readfunc to the global ZeroMQ connections list.
- * Socket id is the connection index in the array.
+ * @param id the connection index in the global array.
+ * @param endpoint ZeroMQ endpoint to bind to.
+ * @param readfunc function to invoke on data ready to read.
+ * @param socket_type ZeroMQ socket type.
+ * @return 0 if succeeded or -1 otherwise.
  */
 int init_znetwork(
 
-    enum zmq_connection_e id,  /* Connection id (array index) */
-    char *endpoint,            /* Connection URL */
-    void *(*readfunc)(void *), /* Function to invoke on data rdy to read */
-    int  socket_type)          /* ZMQ connection type */
+    enum zmq_connection_e id,
+    char *endpoint,
+    void *(*readfunc)(void *),
+    int  socket_type)
 
   {
   void *socket;
@@ -625,10 +648,12 @@ int init_znetwork(
 
 
 
-/*
+/**
  * Create ZeroMQ client side socket of the specified socket_type and place it to the global
- * connections array.
- * Socket id is the connection index in the array.
+ * connections array. Socket id is the connection index in the array.
+ * @param id the connection index in the global array.
+ * @param socket_type ZeroMQ socket type.
+ * @return 0 if succeeded or -1 otherwise.
  */
 int init_zmq_connection(
     enum zmq_connection_e id,
@@ -655,9 +680,11 @@ int init_zmq_connection(
 
 
 
-/*
- * Closes all active connections on the socket with the given id.
- * The socket wouldn't be connected to any endpoint but would still be initialized.
+/**
+ * Closes all active connections on the socket with the given id. After this call the socket
+ * wouldn't be connected to any endpoint but would still be initialized.
+ * @param id the connection index in the global array.
+ * @return 0 if succeeded or -1 otherwise.
  */
 int close_zmq_connection(
     enum zmq_connection_e id)
@@ -1000,13 +1027,13 @@ int wait_request(
 
 #ifdef ZMQ
 
-/*
- * wait_zrequest - wait for a request (socket with data to read)
- * This routine does a zmq_poll on the readset of sockets,
- * when data is ready, the processing routine associated with
- * the socket is invoked.
+/**
+ * Wait for a request (socket with data to read). This routine does a zmq_poll on the set of
+ * sockets, when data is ready, the processing routine associated with the socket is invoked.
+ * @param waittime the time in seconds to wait for requests before return.
+ * @param SState optional argument. Change it outside to force stop this function execution.
+ * @return 0 if succeeded including force stop by SState or -1 otherwise.
  */
-
 int wait_zrequest(
 
   time_t  waittime,   /* I (seconds) */
@@ -1209,7 +1236,7 @@ int wait_zrequest(
   free(SocketAddrSet);
   free(SocketPortSet);
 
-  /* NOTE:  break out if shutdown request received */
+  /* NOTE: break out if shutdown request received */
 
   if ((SState != NULL) && (OrigState != *SState))
     return(0);
@@ -1254,7 +1281,7 @@ int wait_zrequest(
       continue; /* do not time-out this connection */
       }
 
-    /* NOTE:  add info about node associated with connection - NYI */
+    /* NOTE: add info about node associated with connection - NYI */
 
     inet_ntop(AF_INET, &(cp->cn_addr), ipaddrStr, INET_ADDRSTRLEN);
     snprintf(tmpLine, sizeof(tmpLine), "connection %d to host %s has timed out after %d seconds - closing stale connection\n",
@@ -1512,20 +1539,22 @@ int add_conn(
 
 #ifdef ZMQ
 
-/*
- * add_zconnection - add a connection to the g_svr_zconn array.
- * The params addr and port are in host order.
- *
- * NOTE:  This routine cannot fail.
+/**
+ * Add a connection to the global g_svr_zconn ZeroMQ connections array.
+ * @param id the connection index in the global array to add to.
+ * @param socket ZeroMQ socket pointer to be added.
+ * @param func function to invoke on data ready to read.
+ * @param should_poll if true the socket would be added to the global poll array and would be polled
+ *        for inbound requests.
+ * @return always returns 0 that means success.
  */
-
 int add_zconnection(
 
-  enum zmq_connection_e id, /* ZMQ socket id (array index) */
-  void *socket,             /* ZMQ socket connection */
-  void *(*func)(void *),    /* Function to invoke on data rdy to read */
-  bool should_poll,         /* */
-  bool connected)           /*  */
+  enum zmq_connection_e id,
+  void *socket,
+  void *(*func)(void *),
+  bool should_poll,
+  bool connected)
 
   {
   assert(id < ZMQ_CONNECTION_COUNT);

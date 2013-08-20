@@ -173,6 +173,11 @@ int                  updates_waiting_to_send = 0;
 extern time_t       LastServerUpdateTime;
 extern struct connection svr_conn[];
 #ifdef ZMQ
+/**
+ * Global map container to keep this MOM and all received MOM statuses.
+ * The statuses are kept as is as Json::Value object.
+ * The key in the map is node identifier aka name.
+ */
 std::map<std::string, Json::Value> received_json_statuses;
 extern char mom_alias[];
 #endif /* ZMQ */
@@ -8832,8 +8837,11 @@ int read_status_strings(
 
 #ifdef ZMQ
 
-/*
- * Parse and handle mom status message from buffer.
+/**
+ * Parse and handle mom status message from the given buffer.
+ * @param sz data buffer size.
+ * @param data message data buffer.
+ * @return 0 if succeeded or -1 otherwise.
  */
 int mom_read_json_status(size_t sz, char *data)
   {
@@ -8902,6 +8910,11 @@ int mom_read_json_status(size_t sz, char *data)
 
 
 
+/**
+ * Update this MOM status message in the global statuses map with the values from the given
+ * status_strings dynamic string.
+ * @param status_strings dynamic string containing this MOM status.
+ */
 void update_my_json_status(char *status_strings)
   {
 
@@ -8935,19 +8948,22 @@ void update_my_json_status(char *status_strings)
 
 
 
+/**
+ * Enum possible message types enum.
+ */
 enum message_type_e
   {
-  MSG_TYPE_STATUS = 0,
-  MSG_TYPE_COUNT
+  MSG_TYPE_STATUS = 0, /**< Status message. */
+  MSG_TYPE_COUNT       /**< Message types count */
   };
 
 
 
 /**
  * Generates UUID.
- *
  * NOTE: current implementation just generates random sequence. For better security libuuid should
  * be used.
+ * @return random string in UUID format.
  */
 std::string generate_uuid()
   {
@@ -8965,6 +8981,11 @@ std::string generate_uuid()
 
 
 
+/**
+ * Convert message_type_e enum value to corresponding string for "messageType" Json value.
+ * @param message_type enum value.
+ * @return messageType string value.
+ */
 std::string get_message_type_string(enum message_type_e message_type)
   {
   switch (message_type)
@@ -8979,6 +9000,10 @@ std::string get_message_type_string(enum message_type_e message_type)
 
 
 
+/**
+ * Gets the current timestamp represented in ISO 8601 format in local time with timezone offset.
+ * @return a string containing the timestamp.
+ */
 std::string get_current_time()
   {
   time_t rawtime;
@@ -8996,6 +9021,11 @@ std::string get_current_time()
 
 
 
+/**
+ * Create standard for all Json messages header.
+ * @param message_type the type of the message.
+ * @return JsonCPP object that could be updated with other specific information.
+ */
 Json::Value create_default_json_header(enum message_type_e message_type)
   {
   Json::Value root;
@@ -9011,6 +9041,10 @@ Json::Value create_default_json_header(enum message_type_e message_type)
 
 
 
+/**
+ * Dump all collected Json status messages into a character buffer.
+ * @return heap char array that have to be deallocated with free().
+ */
 char *create_json_statuses_buffer()
   {
   Json::Value root = create_default_json_header(MSG_TYPE_STATUS);
@@ -9032,6 +9066,12 @@ char *create_json_statuses_buffer()
 
 
 
+/**
+ * Deallocate character buffer.
+ * The function is designed to be passed to zmq_msg_init_data().
+ * @param data the buffer to be deallocated.
+ * @param hint isn't used.
+ */
 void delete_json_statuses_buffer(void *data, void *hint)
   {
   free(data);

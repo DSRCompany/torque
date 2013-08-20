@@ -531,15 +531,27 @@
 
 #ifdef ZMQ
 
+/**
+ * Service name for ZeroMQ status messaging PBS server side port
+ */
 #define PBS_STATUS_SERVICE_NAME "pbs_status"
 
 #ifndef PBS_STATUS_SERVICE_PORT
+/**
+ * Port number for ZeroMQ status messaging PBS server side port
+ */
 #define PBS_STATUS_SERVICE_PORT 15006
 #endif /* PBS_STATUS_SERVICE_PORT */
 
+/**
+ * Service name for ZeroMQ status messaging MOM side port
+ */
 #define PBS_MOM_STATUS_SERVICE_NAME "pbs_mom_status"
 
 #ifndef PBS_MOM_STATUS_SERVICE_PORT
+/**
+ * Port number for ZeroMQ status messaging MOM side port
+ */
 #define PBS_MOM_STATUS_SERVICE_PORT 15007
 #endif /* PBS_MOM_STATUS_SERVICE_PORT */
 

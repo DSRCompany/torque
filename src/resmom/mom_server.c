@@ -1381,6 +1381,11 @@ int write_status_strings(
 
 #ifdef ZMQ
 
+/**
+ * Send given character buffer to the status messaging ZeroMQ socket.
+ * @param status_string the character buffer to be sent.
+ * @return 0 if succeeded or -1 otherwise.
+ */
 int zmq_send_status(
  
   char *status_string)
@@ -1401,9 +1406,15 @@ int zmq_send_status(
   if (!zsocket)
     {
     log_err(-1, __func__, "ZeroMQ socket isn't initialized yet");
+    return(-1);
     }
 
   msg_data = create_json_statuses_buffer();
+  if (!msg_data)
+    {
+    log_err(-1, __func__, "Error geting status message data buffer");
+    return(-1);
+    }
 
   if (LOGLEVEL >= 9)
     {
@@ -1438,7 +1449,7 @@ int zmq_send_status(
 
   zmq_msg_close(&message);
 
-  return(rc);
+  return(rc == -1 ? -1 : 0);
   } /* END zmq_send_status() */
 
 #endif /* ZMQ */
@@ -2182,9 +2193,13 @@ void sort_paths()
 
 #ifdef ZMQ
 
-/*
+/**
  * Connect the socket with the specified id using the ip address and the port from the given
  * sock_addr structure.
+ * @param id the array index of the socket to be connected.
+ * @param sock_addr the sockattr_in structure containing IP the socket to be connected to.
+ * @param port the TCP port to connect to.
+ * @return 0 if succeeded or -1 otherwise.
  */
 int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr, int port)
   {
@@ -2235,6 +2250,12 @@ int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr
 
 
 
+/**
+ * Set SNDHWM and RCVHWM ZeroMQ socket options to the specified value.
+ * @param id the socket array index.
+ * @param HWM value.
+ * @return 0 if succeeded or -1 otherwise.
+ */
 int zmq_setopt_hwm(zmq_connection_e id, int value)
   {
   const size_t value_len = sizeof(value);
@@ -2249,8 +2270,12 @@ int zmq_setopt_hwm(zmq_connection_e id, int value)
 
 
 
-/*
- * Reconnect MOM status sending socket. All existing connections would be closed.
+/**
+ * Close the ZeroMQ status messages sending socket. Open it again and connect to all up-level MOMs
+ * or to the PBS server if no MOM hierarchy received yet or if all MOMs down.
+ * @return PBSE_NONE (0) if succeeded,
+ *         NO_SERVER_CONFIGURED if no one server to connect found or
+ *         COULD_NOT_CONTACT_SERVER if all connection attempts failed.
  */
 int update_status_connection()
   {
@@ -2328,6 +2353,7 @@ int update_status_connection()
       if (rc == -1) // Error
         {
         log_err(-1, __func__, "Could not contact any of the servers to send an update");
+        rc = COULD_NOT_CONTACT_SERVER;
         }
       else // Not connected but no one error detected
         {

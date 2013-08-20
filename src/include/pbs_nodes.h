@@ -111,7 +111,13 @@
 #define START_MIC_STATUS       "<mic_status>"
 #define END_MIC_STATUS         "</mic_status>"
 #ifdef ZMQ
+/**
+ * GPU status object JSON key
+ */
 #define GPU_STATUS_KEY         "gpu_status"
+/**
+ * MIC status object JSON key
+ */
 #define MIC_STATUS_KEY         "mic_status"
 #endif /* ZMQ */
 

@@ -222,7 +222,11 @@ void          restore_attr_default (struct pbs_attribute *);
 int                     mom_hierarchy_retry_time = NODE_COMM_RETRY_TIME;
 
 #ifdef ZMQ
-bool   use_zmq = false; // Using of ZeroMQ have to be enabled as command-line argument.
+/**
+ * Global flag specifying should ZeroMQ be used for network communication.
+ * The flag is false by default. It could be set to true with '-z' command-line argument.
+ */
+bool   use_zmq = false;
 #endif /* ZMQ */
 
 time_t                  last_task_check_time = 0;
@@ -265,6 +269,9 @@ unsigned int            pbs_scheduler_port;
 extern pbs_net_t        pbs_server_addr;
 unsigned int            pbs_server_port_dis;
 #ifdef ZMQ
+/**
+ * The number of TCP port to be listened for other MOMs status messages by ZeroMQ.
+ */
 unsigned int pbs_status_port = 0;
 #endif /* ZMQ */
 
@@ -542,6 +549,12 @@ void *start_process_pbs_server_port(
 int gpu_entry_by_id(struct pbsnode *,const char *, int);
 int gpu_has_job(struct pbsnode *pnode, int gpuid);
 
+/**
+ * Read GPU status from JsonCPP object into the given node attributes.
+ * @param np the pointer to PBS node to be updated.
+ * @param gpus_status the Json value object reference containing GPU status.
+ * @return DIS_SUCCESS (0) if succeeded or DIS_NOCOMMIT otherwise.
+ */
 int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
   {
   pbs_attribute     temp;
@@ -569,7 +582,7 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
   if (rc != PBSE_NONE)
     {
     log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "cannot initialize attribute");
-    return(rc);
+    return(DIS_NOCOMMIT);
     }
 
   if (gpus_status.isNull() || !gpus_status.isArray())
@@ -775,6 +788,12 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
 
 int save_single_mic_status(dynamic_string *single_mic_status, pbs_attribute *temp);
 
+/**
+ * Read MIC status from JsonCPP object into the given node attributes.
+ * @param np the pointer to PBS node to be updated.
+ * @param mics_status the Json value object reference containing MIC status.
+ * @return DIS_SUCCESS (0) if succeeded or non-zero value otherwise.
+ */
 int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
   {
   /* TODO: Implement. See process_mic_status() */
@@ -800,7 +819,7 @@ int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
   if (rc != PBSE_NONE)
     {
     log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "cannot initialize attribute");
-    return(rc);
+    return(DIS_NOCOMMIT);
     }
 
   if (mics_status.isNull() || !mics_status.isArray())
@@ -892,6 +911,14 @@ int process_uname_str(struct pbsnode *np, const char *str);
 int handle_auto_np_val(struct pbsnode *np, const char *str);
 int save_node_status(struct pbsnode *current, pbs_attribute *temp);
 
+/**
+ * Parse the given character buffer as Json MOMs status report and updates corresponding nodes.
+ * @param sz character buffer size.
+ * @param data character buffer with Json data.
+ * @return DIS_SUCCESS (0) if succeeded,
+ *         SEND_HELLO if a node requested hello message from the server or
+ *         -1 otherwise.
+ */
 int pbs_read_json_status(size_t sz, char *data)
   {
   long              mom_job_sync = 0;
@@ -1188,6 +1215,11 @@ int pbs_read_json_status(size_t sz, char *data)
 
 
 
+/**
+ * Process ZeroMQ MOM status receiving port. Read and process all the received messages.
+ * The function blocks while no errors detected.
+ * @param zsock ready to be read ZeroMQ socket.
+ */
 void *start_process_pbs_status_port(
   void *zsock)
   {
@@ -1300,6 +1332,12 @@ void *start_process_pbs_status_port(
   return(NULL);
   }
 
+
+
+/**
+ * ZeroMQ MOM status receiving thread worker. Once started it blocks reading all incoming messages.
+ * @param zsock ready to be read ZeroMQ socket.
+ */
 void *process_pbs_status_port_thread(
   void *zsock)
 {

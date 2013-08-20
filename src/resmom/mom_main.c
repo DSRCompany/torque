@@ -118,7 +118,11 @@
 /* Global Data Items */
 
 #ifdef ZMQ
-bool   use_zmq = false; // Using of ZeroMQ have to be enabled as command-line argument.
+/**
+ * Global flag specifying should ZeroMQ be used for network communication.
+ * The flag is false by default. It could be set to true with '-z' command-line argument.
+ */
+bool   use_zmq = false;
 #endif /* ZMQ */
 
 int    MOMIsLocked = 0;
@@ -185,6 +189,9 @@ uid_t pbsuser;
 unsigned int pbs_mom_port = 0;
 unsigned int pbs_rm_port = 0;
 #ifdef ZMQ
+/**
+ * The number of TCP port to be listened for other MOMs status messages by ZeroMQ.
+ */
 unsigned int pbs_status_port = 0;
 #endif /* ZMQ */
 tlist_head mom_polljobs; /* jobs that must have resource limits polled */
@@ -3252,6 +3259,11 @@ void *tcp_request(
 
 int update_status_connection();
 
+/**
+ * A handler for processing incoming status messages in Json format on a ZeroMQ socket.
+ * @param args handler arguments list (void **). For this handler the list have to contain a pointer
+ * to the ZeroMQ socket to be read for data.
+ */
 void *status_request(
 
   void *args)
@@ -5356,6 +5368,7 @@ int setup_program_environment(void)
   srand(get_random_number());
 
 #ifdef ZMQ
+  // Connect ZeroMQ status sending socket.
   update_status_connection();
 #endif /* ZMQ */
 

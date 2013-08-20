@@ -193,15 +193,15 @@ enum conn_type
 
 #ifdef ZMQ
 
-/*
+/**
  * Enum containing ZeroMQ sockets names that are used as array indexes for g_svr_zconn array
  * containing all ZeroMQ connections.
  */
 enum zmq_connection_e
   {
-  ZMQ_STATUS_RECEIVE = 0,
-  ZMQ_STATUS_SEND,
-  ZMQ_CONNECTION_COUNT
+  ZMQ_STATUS_RECEIVE = 0, /**< Status messages listening socket */
+  ZMQ_STATUS_SEND,        /**< Status messages receiving socket */
+  ZMQ_CONNECTION_COUNT    /**< ZeroMQ sockets array length */
   };
 
 #endif /* ZMQ */
@@ -230,9 +230,9 @@ int get_max_num_descriptors(void);
 int get_fdset_size(void);
 char * netaddr_pbs_net_t(pbs_net_t);
 #ifdef ZMQ
-int add_zconnection(enum zmq_connection_e, void *, void *(*func)(void *), bool, bool);
-int init_znetwork(enum zmq_connection_e, char *, void *(*readfunc)(void *), int);
-int wait_zrequest(time_t waittime, long *);
+int add_zconnection(enum zmq_connection_e id, void *socket, void *(*func)(void *), bool should_poll, bool connected);
+int init_znetwork(enum zmq_connection_e id, char *endpoint, void *(*readfunc)(void *), int socket_type);
+int wait_zrequest(time_t waittime, long *SState);
 #endif /* ZMQ */
 #ifdef __cplusplus
 }
@@ -258,16 +258,16 @@ struct connection
 
 #ifdef ZMQ
 
-/*
+/**
  * Structure containing data needed to handle ZeroMQ in/out sockets connections.
  */
 struct zconnection_s
   {
-  void *socket;          /* pointer to a ZeroMQ socket */
-  unsigned short authen; /* authentication flags */
-  void *(*func)(void *); /* read function when data rdy */
-  bool should_poll;      /* add this socket to be polled if true */
-  bool connected;        /* at least one bind or connect request was appered */
+  void *socket;          /**< pointer to a ZeroMQ socket */
+  unsigned short authen; /**< authentication flags */
+  void *(*func)(void *); /**< read function when data rdy */
+  bool should_poll;      /**< add this socket to be polled if true */
+  bool connected;        /**< at least one bind or connect request was performed */
   };
 
 #endif /* ZMQ */
