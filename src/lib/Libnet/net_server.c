@@ -525,12 +525,11 @@ int init_network(
 
 #ifdef ZMQ
 
-/**
- * Deinitialize ZeroMQ socket. The socket have not be used after this call.
- * @param socket the socket to be closed.
- * @return 0 if operation succeeded or -1 otherwise.
+/*
+ * Close ZeroMQ socket immediately, do not wait until any pending data will be sent.
+ * The socket haven't be used after this call.
  */
-int deinit_zmq_socket(void *socket)
+int close_zmq_socket(void *socket)
   {
   const int LINGER = 0;
   int rc;
@@ -587,7 +586,7 @@ void deinit_zmq()
       continue;
     }
 
-    deinit_zmq_socket(socket);
+    close_zmq_socket(socket);
     }
 
   // Destroy ZMQ context
@@ -610,12 +609,10 @@ void deinit_zmq()
  * @return 0 if succeeded or -1 otherwise.
  */
 int init_znetwork(
-
-    enum zmq_connection_e id,
-    char *endpoint,
-    void *(*readfunc)(void *),
-    int  socket_type)
-
+    enum zmq_connection_e id,  /* Connection id (array index) */
+    char *endpoint,            /* Connection URL */
+    void *(*readfunc)(void *), /* Function to invoke on data ready to read */
+    int  socket_type)          /* ZMQ connection type */
   {
   void *socket;
   int  rc;
@@ -712,7 +709,7 @@ int close_zmq_connection(
     log_err(rc, __func__, "unable to get socket option");
     return -1;
     }
-  rc = deinit_zmq_socket(socket);
+  rc = close_zmq_socket(socket);
 
   if (rc)
     {
