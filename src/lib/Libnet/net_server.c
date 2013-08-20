@@ -172,11 +172,6 @@ struct zconnection_s g_svr_zconn[ZMQ_CONNECTION_COUNT] = {};
  */
 static zmq_pollitem_t *gs_zmq_poll_list = NULL;
 
-/**
- * Poll array size
- */
-static int             gs_zmq_poll_size = 0;
-
 
 
 /**
@@ -533,17 +528,26 @@ int close_zmq_socket(void *socket)
   {
   const int LINGER = 0;
   int rc;
-  rc = zmq_setsockopt(socket, ZMQ_LINGER, &LINGER, sizeof(LINGER)); // Set LINGER option to zero
-  if (rc)
+
+  if (!socket)
+    {
+    log_err(-1, __func__, "given socket pointer is NULL");
+    return(-1);
+    }
+
+  // Set LINGER option to zero. This instruct ZeroMQ that all unsent messages could be dropped now.
+  if (zmq_setsockopt(socket, ZMQ_LINGER, &LINGER, sizeof(LINGER)))
     {
     log_err(errno, __func__, "can't set LINGER option to ZMQ socket");
     }
+
   rc = zmq_close(socket);
 
   if (rc)
     {
     log_err(errno, __func__, "can't close ZMQ socket");
     }
+
   return rc;
   }
 
@@ -557,14 +561,25 @@ int init_zmq()
   {
   // Allocate the poll array of the max allowed size. This could be optimized in the future.
   gs_zmq_poll_list = (zmq_pollitem_t *)calloc(get_max_num_descriptors(), sizeof(zmq_pollitem_t));
+  if (!gs_zmq_poll_list)
+    {
+    log_err(errno, __func__, "can't allocate memory for gs_zmq_poll_list array");
+    return -1;
+    }
+ 
   // We'll only perform ZMQ_POLLIN poll requests on the list items so init the events here.
   for (int i = 0; i < get_max_num_descriptors(); i++) {
     gs_zmq_poll_list[i].events = ZMQ_POLLIN;
   }
 
   g_zmq_context = zmq_ctx_new();
+  if (!g_zmq_context)
+    {
+    log_err(errno, __func__, "can't create ZeroMQ context");
+    return -1;
+    }
 
-  return g_zmq_context ? 0 : -1;
+  return 0;
   }
 
 
@@ -578,22 +593,29 @@ void deinit_zmq()
   void *socket = NULL;
   int i;
 
-  // Close all sockets
-  for (i = 0; i < ZMQ_CONNECTION_COUNT; i++)
+  if (g_zmq_context)
     {
-    socket = g_svr_zconn[i].socket;
-    if (!socket) {
-      continue;
-    }
+    // Close all sockets
+    for (i = 0; i < ZMQ_CONNECTION_COUNT; i++)
+      {
+      socket = g_svr_zconn[i].socket;
+      if (!socket) {
+        continue;
+      }
 
     close_zmq_socket(socket);
     }
 
-  // Destroy ZMQ context
-  zmq_ctx_destroy(g_zmq_context);
+    // Destroy ZMQ context
+    zmq_ctx_destroy(g_zmq_context);
+    }
 
   // Dealloc global data structures
-  free(gs_zmq_poll_list);
+
+  if (gs_zmq_poll_list)
+    {
+    free(gs_zmq_poll_list);
+    }
   }
 
 
@@ -617,7 +639,7 @@ int init_znetwork(
   void *socket;
   int  rc;
 
-  if (!g_zmq_context || !readfunc)
+  if (!g_zmq_context || !g_zmq_context || !readfunc || id >= ZMQ_CONNECTION_COUNT)
     {
     log_err(-1, __func__, "wrong arguments specified");
     return(-1);
@@ -635,6 +657,9 @@ int init_znetwork(
     {
     sprintf(log_buffer, "unable to bind to the endpoint '%s'", endpoint);
     log_err(errno, __func__, log_buffer);
+
+    zmq_close(socket);
+
     return(-1);
     }
 
@@ -657,9 +682,9 @@ int init_zmq_connection(
     int  socket_type)
 
   {
-  if (!g_zmq_context)
+  if (!g_zmq_context || id >= ZMQ_CONNECTION_COUNT)
     {
-    log_err(-1, __func__, "zmq context isn't initialized");
+    log_err(-1, __func__, "wrong arguments specified");
     return -1;
     }
 
@@ -690,6 +715,12 @@ int close_zmq_connection(
   void *socket;
   int socket_type;
   size_t socket_type_length = sizeof(socket_type);
+
+  if (!g_zmq_context || id >= ZMQ_CONNECTION_COUNT)
+    {
+    log_err(-1, __func__, "wrong arguments specified");
+    return(-1);
+    }
 
   if (!g_svr_zconn[id].connected)
     {
@@ -820,7 +851,6 @@ int wait_request(
   int             SetSize = 0;
   u_long   		  *SocketAddrSet = NULL;
   u_long          *SocketPortSet = NULL;
-
 
   char            tmpLine[1024];
   char            ipaddrStr[INET_ADDRSTRLEN];
@@ -1043,14 +1073,14 @@ int wait_zrequest(
 
   int             MaxNumDescriptors = 0;
   int             SetSize = 0;
-  u_long   		  *SocketAddrSet = NULL;
-  u_long          *SocketPortSet = NULL;
+  u_long   		   *SocketAddrSet = NULL;
+  u_long         *SocketPortSet = NULL;
 
   char            tmpLine[1024];
   char            ipaddrStr[INET_ADDRSTRLEN];
   long            OrigState = 0;
 
-  int poll_pos = 0;
+  int             poll_size = 0;
 
   if (SState != NULL)
     OrigState = *SState;
@@ -1080,7 +1110,7 @@ int wait_zrequest(
     if (FD_ISSET(i, GlobalSocketReadSet))
       {
       // Update/set the corresponding poll item.
-      zmq_pollitem_t *current = &(gs_zmq_poll_list[poll_pos]);
+      zmq_pollitem_t *current = &(gs_zmq_poll_list[poll_size]);
       if (current->fd != i)
         {
         current->fd = i;
@@ -1089,7 +1119,7 @@ int wait_zrequest(
         {
         current->socket = NULL;
         }
-      poll_pos++;
+      poll_size++;
       }
     }
   // Now place ZMQ sockets to the poll list
@@ -1097,20 +1127,20 @@ int wait_zrequest(
     {
     if (g_svr_zconn[i].socket != NULL && g_svr_zconn[i].should_poll)
       {
-      gs_zmq_poll_list[poll_pos].socket = g_svr_zconn[i].socket;
-      gs_zmq_poll_list[poll_pos].events = ZMQ_POLLIN;
-      poll_pos++;
+      gs_zmq_poll_list[poll_size].socket = g_svr_zconn[i].socket;
+      gs_zmq_poll_list[poll_size].events = ZMQ_POLLIN;
+      poll_size++;
       }
     }
-  gs_zmq_poll_size = poll_pos; // #fds + #zsocks
 
   pthread_mutex_unlock(global_sock_read_mutex);
 
-  n = zmq_poll (gs_zmq_poll_list, gs_zmq_poll_size, waittime * 1000 /* msec */);
+  n = zmq_poll (gs_zmq_poll_list, poll_size, waittime * 1000 /* msec */);
 
   if (n == -1)
     {
-    if (errno == EINTR)
+    int poll_err = errno;
+    if (poll_err == EINTR)
       {
       n = 0; /* interrupted, cycle around */
       }
@@ -1124,7 +1154,7 @@ int wait_zrequest(
 
       /* NOTE: selset may be modified by failed select() */
 
-      for (i = 0; i < gs_zmq_poll_size; i++)
+      for (i = 0; i < poll_size; i++)
         {
         if (gs_zmq_poll_list[i].socket || (gs_zmq_poll_list[i].revents & ZMQ_POLLIN))
           {
@@ -1143,17 +1173,18 @@ int wait_zrequest(
       free(SocketAddrSet);
       free(SocketPortSet);
 
-      log_err(errno, __func__, "Unable to select sockets to read requests");
+      log_err(poll_err, __func__, "Unable to select sockets to read requests");
 
       return(-1);
       }  /* END else (errno == EINTR) */
     }    /* END if (n == -1) */
 
   int zconn_idx = 0;
-  for (i = 0; (i < (gs_zmq_poll_size)) && (n > 0); i++)
+  for (i = 0; (i < (poll_size)) && (n > 0); i++)
     {
     if (gs_zmq_poll_list[i].revents & ZMQ_POLLIN)
       {
+      n--;
       if (gs_zmq_poll_list[i].socket)
         {
         // Handle ZMQ socket
@@ -1180,9 +1211,8 @@ int wait_zrequest(
         {
         int fd = gs_zmq_poll_list[i].fd;
         // Handle standard socket
+
         pthread_mutex_lock(svr_conn[fd].cn_mutex);
-        /* this socket has data */
-        n--;
 
         svr_conn[fd].cn_lasttime = time(NULL);
 
@@ -1242,7 +1272,7 @@ int wait_zrequest(
 
   now = time((time_t *)0);
 
-  for (i = 0; i < gs_zmq_poll_size; i++)
+  for (i = 0; i < poll_size; i++)
     {
     struct connection *cp;
     int fd;
@@ -1543,7 +1573,7 @@ int add_conn(
  * @param func function to invoke on data ready to read.
  * @param should_poll if true the socket would be added to the global poll array and would be polled
  *        for inbound requests.
- * @return always returns 0 that means success.
+ * @return 0 if succeed or -1 if wrong id passed.
  */
 int add_zconnection(
 
@@ -1554,7 +1584,10 @@ int add_zconnection(
   bool connected)
 
   {
-  assert(id < ZMQ_CONNECTION_COUNT);
+  if (id >= ZMQ_CONNECTION_COUNT)
+    {
+    return -1;
+    }
 
   g_svr_zconn[id].socket = socket;
   g_svr_zconn[id].func   = func;

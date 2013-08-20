@@ -313,7 +313,7 @@ extern int  use_nvidia_gpu;
 #endif
 
 #ifdef ZMQ
-extern bool use_zmq;
+extern bool g_use_zmq;
 extern struct zconnection_s g_svr_zconn[];
 #endif /* ZMQ */
 
@@ -1548,7 +1548,7 @@ void mom_server_all_update_stat(void)
 #ifdef ZMQ
   // Status sending with ZeroMQ is non-blocking asynchronous operation. We don't need to fork here
   // if using ZeroMQ.
-  if (!use_zmq)
+  if (!g_use_zmq)
     {
 #endif /* ZMQ */
 
@@ -1600,7 +1600,7 @@ void mom_server_all_update_stat(void)
       generate_alps_status(mom_status, apbasil_path, apbasil_protocol);
  
 #ifdef ZMQ
-    if (!use_zmq)
+    if (!g_use_zmq)
       {
 #endif /* ZMQ */
       if ((nc = update_current_path(mh)) != NULL)
@@ -1641,7 +1641,7 @@ void mom_server_all_update_stat(void)
         close(nc->stream);
 #ifdef ZMQ
       }
-    else /* !use_zmq */
+    else /* !g_use_zmq */
       {
       update_my_json_status(mom_status->str);
       rc = zmq_send_status(mom_status->str);
@@ -2213,12 +2213,6 @@ int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr
   size_t printed_length;
   int rc;
 
-  if (sock_addr->sin_family != AF_INET)
-    {
-    log_err(-1, __func__, "can't connect to non AF_INET hosts");
-    return(-1);
-    }
-
   printed_length = snprintf(conn_url_buf, CONN_URL_LENGTH,
       "tcp://%s:%u", inet_ntoa(sock_addr->sin_addr), port);
   assert(printed_length < CONN_URL_LENGTH);
@@ -2314,6 +2308,7 @@ int update_status_connection()
         {
         connected = true;
         }
+      nc = update_current_path(mh);
       }
     while (nc && nc != first_node);
     }
@@ -2323,8 +2318,9 @@ int update_status_connection()
   // If connected to no one node try to connect to one of the servers.
   if (!connected)
     {
+    int servers_tried = 0;
     /* now, once we contact one server we stop attempting to report in */
-    for (int i = 0; i < PBS_MAXSERVER && !rc; i++)
+    for (int i = 0; i < PBS_MAXSERVER; i++)
       {
       if ((mom_servers[i].pbs_servername[0] == '\0') ||
           (time_now < (mom_servers[i].MOMLastSendToServerTime + ServerStatUpdateInterval)))
@@ -2347,10 +2343,11 @@ int update_status_connection()
         {
         connected = true;
         }
+      servers_tried++;
       }
     if (!connected)
       {
-      if (rc == -1) // Error
+      if (servers_tried > 0) // Error
         {
         log_err(-1, __func__, "Could not contact any of the servers to send an update");
         rc = COULD_NOT_CONTACT_SERVER;
@@ -2493,7 +2490,7 @@ int read_cluster_addresses(
   free_dynamic_string(hierarchy_file);
 
 #ifdef ZMQ
-  if (use_zmq)
+  if (g_use_zmq)
     {
     update_status_connection();
     }

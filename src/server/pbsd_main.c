@@ -226,7 +226,7 @@ int                     mom_hierarchy_retry_time = NODE_COMM_RETRY_TIME;
  * Global flag specifying should ZeroMQ be used for network communication.
  * The flag is false by default. It could be set to true with '-z' command-line argument.
  */
-bool   use_zmq = false;
+bool   g_use_zmq = false;
 #endif /* ZMQ */
 
 time_t                  last_task_check_time = 0;
@@ -1838,7 +1838,7 @@ void parse_command_line(
 #ifdef ZMQ
       case 'z':
 
-        use_zmq = true;
+        g_use_zmq = true;
 
         break;
 
@@ -2721,7 +2721,7 @@ int main(
     }
 
 #ifdef ZMQ
-  if (use_zmq) {
+  if (g_use_zmq) {
     /* Initialize ZeroMQ context */
     int rc = init_zmq();
     if (rc) {
@@ -2935,7 +2935,7 @@ int main(
     }
 
 #ifdef ZMQ
-  if (use_zmq)
+  if (g_use_zmq)
     {
     char endpoint[32];
     sprintf(endpoint, "tcp://*:%d", pbs_status_port);
@@ -2986,7 +2986,7 @@ int main(
 #endif /* END ENABLE_UNIX_SOCKETS */
 
 #ifdef ZMQ
-  if (use_zmq) {
+  if (g_use_zmq) {
     deinit_zmq();
   }
 #endif /* ZMQ */

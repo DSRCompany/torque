@@ -8845,7 +8845,7 @@ int read_status_strings(
  */
 int mom_read_json_status(size_t sz, char *data)
   {
-  if (sz <= 0 || !data) 
+  if (sz == 0 || !data) 
     {
     return -1;
     }
@@ -8967,13 +8967,10 @@ enum message_type_e
  */
 std::string generate_uuid()
   {
-  const int buf_len = strlen("f81d4fae-7dec-11d0-a765-00a0c91e6bf6") + 1; // an example UUID
-  char buf[buf_len];
+  char buf[] = "f81d4fae-7dec-11d0-a765-00a0c91e6bf6"; // an example UUID
   const int div = RAND_MAX / 0xffff;
 
-  srand(time(NULL));
-
-  snprintf(buf, buf_len, "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
+  sprintf(buf, "%04x%04x-%04x-%04x-%04x-%04x%04x%04x",
       rand() / div, rand() / div, rand() / div, rand() / div,
       rand() / div, rand() / div, rand() / div, rand() / div);
   return buf;
@@ -9008,8 +9005,8 @@ std::string get_current_time()
   {
   time_t rawtime;
   struct tm * timeinfo;
-  const size_t buffer_size = strlen("2013-07-17 15:09:34.123+0400") + 1;
-  char buffer [buffer_size];
+  char buffer [buffer_size] = "2013-07-17 15:09:34.123+0400";
+  const size_t buffer_size = sizeof(buffer);
 
   time(&rawtime);
   timeinfo = localtime(&rawtime);
@@ -9074,6 +9071,7 @@ char *create_json_statuses_buffer()
  */
 void delete_json_statuses_buffer(void *data, void *hint)
   {
+  (void)hint; /* exclude 'unused' compiler warning */
   free(data);
   }
 

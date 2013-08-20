@@ -264,7 +264,7 @@ struct connection
 struct zconnection_s
   {
   void *socket;          /**< pointer to a ZeroMQ socket */
-  unsigned short authen; /**< authentication flags */
+  unsigned int authen;   /**< authentication flags */
   void *(*func)(void *); /**< read function when data rdy */
   bool should_poll;      /**< add this socket to be polled if true */
   bool connected;        /**< at least one bind or connect request was performed */

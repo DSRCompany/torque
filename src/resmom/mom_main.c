@@ -122,7 +122,7 @@
  * Global flag specifying should ZeroMQ be used for network communication.
  * The flag is false by default. It could be set to true with '-z' command-line argument.
  */
-bool   use_zmq = false;
+bool   g_use_zmq = false;
 #endif /* ZMQ */
 
 int    MOMIsLocked = 0;
@@ -4000,6 +4000,10 @@ void initialize_globals(void)
   if (ptr != NULL)
     {
     pbs_status_port = (int)strtol(ptr, NULL, 10);
+    if (errno != 0)
+      {
+      pbs_status_port = -1;
+      }
     }
 
   if (pbs_status_port <= 0)
@@ -4401,7 +4405,7 @@ void parse_command_line(
 #ifdef ZMQ
       case 'z':
 
-        use_zmq = true;
+        g_use_zmq = true;
 
         break;
 
@@ -4839,7 +4843,7 @@ int setup_program_environment(void)
   /* initialize the network interface */
 
 #ifdef ZMQ
-  if (use_zmq) {
+  if (g_use_zmq) {
     /* Initialize ZeroMQ context */
     int rc = init_zmq();
     if (rc) {
@@ -4903,7 +4907,7 @@ int setup_program_environment(void)
 
 #ifdef ZMQ
 
-  if (use_zmq)
+  if (g_use_zmq)
     {
     char endpoint[32];
     sprintf(endpoint, "tcp://*:%d", pbs_status_port);
@@ -5257,7 +5261,7 @@ int setup_program_environment(void)
   read_mom_hierarchy();
 
 #ifdef ZMQ
-  if (use_zmq) {
+  if (g_use_zmq) {
     int rc = init_zmq_connection(ZMQ_STATUS_SEND, ZMQ_DEALER);
     if (rc)
       {
@@ -6241,7 +6245,7 @@ void main_loop(void)
     /* wait_request does a select and then calls the connection's cn_func for sockets with data */
 
 #ifdef ZMQ
-    if (use_zmq)
+    if (g_use_zmq)
       {
       // Use ZMQ poll instead of select()
       rc = wait_zrequest(tmpTime, NULL);
@@ -6718,7 +6722,7 @@ int main(
   mom_close_poll();
 
 #ifdef ZMQ
-  if (use_zmq) {
+  if (g_use_zmq) {
     deinit_zmq();
   }
 #endif /* ZMQ */
