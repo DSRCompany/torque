@@ -9005,7 +9005,7 @@ std::string get_current_time()
   {
   time_t rawtime;
   struct tm * timeinfo;
-  char buffer [buffer_size] = "2013-07-17 15:09:34.123+0400";
+  char buffer [] = "2013-07-17 15:09:34.123+0400";
   const size_t buffer_size = sizeof(buffer);
 
   time(&rawtime);

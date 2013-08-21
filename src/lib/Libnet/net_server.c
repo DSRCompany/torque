@@ -572,10 +572,13 @@ int init_zmq()
     gs_zmq_poll_list[i].events = ZMQ_POLLIN;
   }
 
+  sprintf(log_buffer, "PID: %u", getpid());
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
   g_zmq_context = zmq_ctx_new();
   if (!g_zmq_context)
     {
     log_err(errno, __func__, "can't create ZeroMQ context");
+    free(gs_zmq_poll_list);
     return -1;
     }
 
@@ -645,6 +648,8 @@ int init_znetwork(
     return(-1);
     }
 
+  sprintf(log_buffer, "PID: %u", getpid());
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
   socket = zmq_socket(g_zmq_context, socket_type);
 
   if (!socket) {
@@ -688,6 +693,8 @@ int init_zmq_connection(
     return -1;
     }
 
+  sprintf(log_buffer, "PID: %u", getpid());
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
   void *socket = zmq_socket(g_zmq_context, socket_type);
   if (!socket)
     {
@@ -748,6 +755,8 @@ int close_zmq_connection(
     return -1;
     }
 
+  sprintf(log_buffer, "PID: %u", getpid());
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
   socket = zmq_socket(g_zmq_context, socket_type);
 
   if (!socket)

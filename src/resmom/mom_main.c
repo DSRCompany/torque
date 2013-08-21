@@ -4628,7 +4628,7 @@ int setup_program_environment(void)
 #endif
   char logSuffix[MAX_PORT_STRING_LEN];
   char momLock[MAX_LOCK_FILE_NAME_LEN];
-#ifdef PENABLE_LINUX26_CPUSETS
+#if defined(PENABLE_LINUX26_CPUSETS) || defined(ZMQ)
   int  rc;
 #endif
 
@@ -4842,19 +4842,6 @@ int setup_program_environment(void)
 
   /* initialize the network interface */
 
-#ifdef ZMQ
-  if (g_use_zmq) {
-    /* Initialize ZeroMQ context */
-    int rc = init_zmq();
-    if (rc) {
-      if (LOGLEVEL > 0) {
-        log_event(PBSEVENT_ERROR, PBS_EVENTCLASS_SERVER, __func__, "Can't initialize ZeroMQ context.");
-      }
-      return(1);
-    }
-  }
-#endif /* ZMQ */
-
   if (init_network(pbs_mom_port, mom_process_request) != 0)
     {
     c = errno;
@@ -4906,18 +4893,9 @@ int setup_program_environment(void)
     }
 
 #ifdef ZMQ
-
-  if (g_use_zmq)
-    {
-    char endpoint[32];
-    sprintf(endpoint, "tcp://*:%d", pbs_status_port);
-    if (init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, status_request, ZMQ_DEALER) != 0)
-      {
-      log_err(-1, msg_daemonname, (char *)"init_znetwork failed to bind to ZeroMQ socket");
-      return(3);
-      }
-    }
-
+  // TODO: Check that we could create ZeroMQ context and the needed ports are free to use.
+  //       Do it here, before the process is forked. The real ZeroMQ initialization is performed
+  //       after the fork.
 #endif /* ZMQ */
 
 #ifdef PENABLE_LINUX26_CPUSETS
@@ -5261,14 +5239,34 @@ int setup_program_environment(void)
   read_mom_hierarchy();
 
 #ifdef ZMQ
-  if (g_use_zmq) {
-    int rc = init_zmq_connection(ZMQ_STATUS_SEND, ZMQ_DEALER);
+  /* Initialize ZeroMQ */
+  if (g_use_zmq)
+    {
+    char endpoint[32];
+
+    /* Initialize ZeroMQ context */
+    rc = init_zmq();
+    if (rc)
+      {
+      log_err(rc, msg_daemonname, "Can't initialize ZeroMQ context.");
+      return(1);
+      }
+
+    sprintf(endpoint, "tcp://*:%d", pbs_status_port);
+    rc = init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, status_request, ZMQ_DEALER);
+    if (rc)
+      {
+      log_err(-1, msg_daemonname, "init_znetwork failed to bind to ZeroMQ socket");
+      return(3);
+      }
+
+    rc = init_zmq_connection(ZMQ_STATUS_SEND, ZMQ_DEALER);
     if (rc)
       {
       log_err(-1, msg_daemonname, "can't create ZMQ socket");
       return(3);
       }
-  }
+    }
 #endif /* ZMQ */
 
   /* initialize machine-dependent polling routines */

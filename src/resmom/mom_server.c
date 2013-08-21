@@ -1426,6 +1426,8 @@ int zmq_send_status(
   zmq_msg_t message;
   zmq_msg_init_data(&message, msg_data, strlen(msg_data), delete_json_statuses_buffer, NULL);
 
+  sprintf(log_buffer, "PID: %u", getpid());
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
   rc = zmq_msg_send(&message, zsocket, ZMQ_DONTWAIT);
   if (LOGLEVEL >= 10)
     {
