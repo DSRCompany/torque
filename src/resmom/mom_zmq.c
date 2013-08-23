@@ -15,6 +15,7 @@
 #include "pbs_ifl.h"
 #include "resmon.h"
 #include "mom_server.h"
+#include "../lib/Libnet/zmq_common.h"
 
 
 
