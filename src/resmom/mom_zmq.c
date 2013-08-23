@@ -131,12 +131,7 @@ int update_status_connection()
         sprintf(log_buffer, "Connecting to node %s", nc->name);
         log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
         }
-      // FIXME: Temporary workaround for the non-standard connection port numbers:
-      //        Calculate the ZMQ port number as generic tcp socket port plus difference between
-      //        predefined values.
-      //        In the future it have to be configurable as it done for generic tcp sockets ports.
-      unsigned int port = ntohs(nc->sock_addr.sin_port)
-        + (PBS_MOM_STATUS_SERVICE_PORT - PBS_MANAGER_SERVICE_PORT);
+      unsigned int port = ntohs(nc->sock_addr.sin_port);
       rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr), port);
       if (rc != -1) // Success
         {
