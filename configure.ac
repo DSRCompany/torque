@@ -2326,6 +2326,7 @@ AC_OUTPUT(buildutils/pbs_mkdirs
 	  src/lib/Libcsv/Makefile
 	  src/lib/Libdis/Makefile
 	  src/lib/Libifl/Makefile
+	  src/lib/Libjson/Makefile
 	  src/lib/Liblog/Makefile
 	  src/lib/Libnet/Makefile
 	  src/lib/Libpbs/Makefile

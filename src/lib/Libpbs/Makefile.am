@@ -1,6 +1,6 @@
 include $(top_srcdir)/buildutils/config.mk
 
-AM_CPPFLAGS += -I$(top_srcdir)/src/lib/Libdis -DIFF_PATH=\"$(IFF_PATH)\" -DPBS_DEFAULT_FILE=\"$(PBS_DEFAULT_FILE)\" -DPBS_SERVER_HOME=\"$(PBS_SERVER_HOME)\"
+AM_CPPFLAGS += -I$(top_srcdir)/src/lib/Libdis -I$(top_srcdir)/src/lib/Libjson -DIFF_PATH=\"$(IFF_PATH)\" -DPBS_DEFAULT_FILE=\"$(PBS_DEFAULT_FILE)\" -DPBS_SERVER_HOME=\"$(PBS_SERVER_HOME)\"
 
 CLEANFILES = *.gcda *.gcno *.gcov
 
@@ -92,9 +92,10 @@ libtorque_la_SOURCES = ../Libcsv/csv.c ../Libdis/dis.c \
 				../Libnet/server_core.c \
 		    ../Libnet/rm.c ../Libnet/port_forwarding.c \
 				../Libnet/net_cache.c ../Libutils/u_lock_ctl.c \
+				../Libnet/zmq_common.c \
 				../Libutils/u_hash_map_structs.c ../Libutils/u_memmgr.c \
 				../Libutils/u_hash_table.c ../Libutils/u_resizable_array.c \
-				../Libutils/u_threadpool.c ../Libutils/u_users.c ../Libutils/u_wrapper.c
-
+				../Libutils/u_threadpool.c ../Libutils/u_users.c ../Libutils/u_wrapper.c \
+				../Libjson/Message.cpp ../Libjson/MomStatusMessage.cpp
 
 

@@ -86,6 +86,8 @@
 #include "pbs_ifl.h" /* PBS_MAXSERVERNAME */
 
 #define DEFAULT_SERVER_STAT_UPDATES 45
+#define NO_SERVER_CONFIGURED             -1
+#define COULD_NOT_CONTACT_SERVER         -2
 
 
 typedef struct mom_server

@@ -214,8 +214,9 @@
 #include <arpa/inet.h>
 #endif
 #ifdef ZMQ
-#include <arpa/inet.h>
-#include <zmq.h>
+#include "mom_zmq.h"
+#include "zmq_send_comm.h"
+#include "zmq_process_status.h"
 #endif /* ZMQ */
 
 #include "pbs_ifl.h"
@@ -255,8 +256,6 @@
 #define UPDATE_TO_MOM                     1
 #define MIN_SERVER_UDPATE_SPACING         3
 #define MAX_SERVER_UPDATE_SPACING         40
-#define NO_SERVER_CONFIGURED             -1
-#define COULD_NOT_CONTACT_SERVER         -2
 
 #ifdef NUMA_SUPPORT
 extern int numa_index;
@@ -1379,85 +1378,6 @@ int write_status_strings(
 
 
 
-#ifdef ZMQ
-
-/**
- * Send given character buffer to the status messaging ZeroMQ socket.
- * @param status_string the character buffer to be sent.
- * @return 0 if succeeded or -1 otherwise.
- */
-int zmq_send_status(
- 
-  char *status_string)
- 
-  {
-  int rc;
-  char *msg_data;
-  void *zsocket;
-
-  if (LOGLEVEL >= 9)
-    {
-    snprintf(log_buffer, sizeof(log_buffer),
-      "Attempting to send status update");
-    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
-    }
- 
-  zsocket = g_svr_zconn[ZMQ_STATUS_SEND].socket;
-  if (!zsocket)
-    {
-    log_err(-1, __func__, "ZeroMQ socket isn't initialized yet");
-    return(-1);
-    }
-
-  msg_data = create_json_statuses_buffer();
-  if (!msg_data)
-    {
-    log_err(-1, __func__, "Error geting status message data buffer");
-    return(-1);
-    }
-
-  if (LOGLEVEL >= 9)
-    {
-    snprintf(log_buffer, sizeof(log_buffer),
-      "Status message is the following (could be truncated):\n%s", msg_data);
-    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
-    }
-
-  zmq_msg_t message;
-  zmq_msg_init_data(&message, msg_data, strlen(msg_data), delete_json_statuses_buffer, NULL);
-
-  sprintf(log_buffer, "PID: %u", getpid());
-  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
-  rc = zmq_msg_send(&message, zsocket, ZMQ_DONTWAIT);
-  if (LOGLEVEL >= 10)
-    {
-    sprintf(log_buffer, "zmq_msg_send: rc=%d, errno=%d, socket=%p", rc, errno, zsocket);
-    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
-    }
-
-  if (rc != -1)
-    {
-    if (LOGLEVEL >= 10)
-      {
-      snprintf(log_buffer, sizeof(log_buffer),
-          "Successfully sent status update");
-      log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER,__func__,log_buffer);
-      }
-    }
-  else
-    {
-    log_err(errno, __func__, "error sending status to the server");
-    }
-
-  zmq_msg_close(&message);
-
-  return(rc == -1 ? -1 : 0);
-  } /* END zmq_send_status() */
-
-#endif /* ZMQ */
-
-
-
 /* send_update() 
  *
  * decides whether or not a status update should be sent, including using a 
@@ -2190,181 +2110,6 @@ void sort_paths()
       }
     }
   } /* END sort_paths() */
-
-
-
-#ifdef ZMQ
-
-/**
- * Connect the socket with the specified id using the ip address and the port from the given
- * sock_addr structure.
- * @param id the array index of the socket to be connected.
- * @param sock_addr the sockattr_in structure containing IP the socket to be connected to.
- * @param port the TCP port to connect to.
- * @return 0 if succeeded or -1 otherwise.
- */
-int zmq_connect_sockaddr(enum zmq_connection_e id, struct sockaddr_in *sock_addr, int port)
-  {
-// TODO: Rework this:
-// 1. We have to use different port (probably default for now)
-// 2. Move the define to appropriate header file
-#ifndef CONN_URL_LENGTH
-#define CONN_URL_LENGTH 28
-#endif
-  char conn_url_buf[CONN_URL_LENGTH]; // Max length: "tcp://123.123.123.123:12345\0" = 28
-  size_t printed_length;
-  int rc;
-
-  printed_length = snprintf(conn_url_buf, CONN_URL_LENGTH,
-      "tcp://%s:%u", inet_ntoa(sock_addr->sin_addr), port);
-  assert(printed_length < CONN_URL_LENGTH);
-
-  void *zsocket = g_svr_zconn[id].socket;
-  rc = zmq_connect(zsocket, conn_url_buf);
-  if (LOGLEVEL >= 10)
-    {
-    sprintf(log_buffer, "connected: rc: %d, errno: %d, socket: %p, URL: %s", rc, errno, zsocket, conn_url_buf);
-    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
-    }
-  if (rc == -1)
-    {
-    sprintf(log_buffer, "can't connect to the server %s", conn_url_buf);
-    log_err(errno, __func__, log_buffer);
-    }
-  else
-    {
-    if (LOGLEVEL >= 10)
-      {
-      sprintf(log_buffer, "connected to the server %s", conn_url_buf);
-      log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
-      }
-    g_svr_zconn[id].connected = true;
-    }
-
-  return(rc);
-  }
-
-
-
-/**
- * Set SNDHWM and RCVHWM ZeroMQ socket options to the specified value.
- * @param id the socket array index.
- * @param HWM value.
- * @return 0 if succeeded or -1 otherwise.
- */
-int zmq_setopt_hwm(zmq_connection_e id, int value)
-  {
-  const size_t value_len = sizeof(value);
-
-  int rc = zmq_setsockopt(g_svr_zconn[ZMQ_STATUS_SEND].socket, ZMQ_SNDHWM, &value, value_len);
-  if (rc != 0)
-    {
-    rc = zmq_setsockopt(g_svr_zconn[ZMQ_STATUS_SEND].socket, ZMQ_RCVHWM, &value, value_len);
-    }
-  return rc;
-  }
-
-
-
-/**
- * Close the ZeroMQ status messages sending socket. Open it again and connect to all up-level MOMs
- * or to the PBS server if no MOM hierarchy received yet or if all MOMs down.
- * @return PBSE_NONE (0) if succeeded,
- *         NO_SERVER_CONFIGURED if no one server to connect found or
- *         COULD_NOT_CONTACT_SERVER if all connection attempts failed.
- */
-int update_status_connection()
-  {
-  int rc = PBSE_NONE;
-  node_comm_t *nc = NULL;
-  bool connected = false;
-
-  if (LOGLEVEL >= 9)
-    {
-    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "Update status port connections");
-    }
-
-  close_zmq_connection(ZMQ_STATUS_SEND);
-  zmq_setopt_hwm(ZMQ_STATUS_SEND, 1);
-
-  // Try to connect to all nodes of a level.
-  nc = update_current_path(mh);
-  if (nc != NULL)
-    {
-    node_comm_t *first_node= nc;
-    do
-      {
-      if (LOGLEVEL >= 9)
-        {
-        sprintf(log_buffer, "Connecting to node %s", nc->name);
-        log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
-        }
-      // FIXME: Temporary workaround for the non-standard connection port numbers:
-      //        Calculate the ZMQ port number as generic tcp socket port plus difference between
-      //        predefined values.
-      //        In the future it have to be configurable as it done for generic tcp sockets ports.
-      unsigned int port = ntohs(nc->sock_addr.sin_port)
-        + (PBS_MOM_STATUS_SERVICE_PORT - PBS_MANAGER_SERVICE_PORT);
-      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr), port);
-      if (rc != -1) // Success
-        {
-        connected = true;
-        }
-      nc = update_current_path(mh);
-      }
-    while (nc && nc != first_node);
-    }
-
-  rc = PBSE_NONE;
-
-  // If connected to no one node try to connect to one of the servers.
-  if (!connected)
-    {
-    int servers_tried = 0;
-    /* now, once we contact one server we stop attempting to report in */
-    for (int i = 0; i < PBS_MAXSERVER; i++)
-      {
-      if ((mom_servers[i].pbs_servername[0] == '\0') ||
-          (time_now < (mom_servers[i].MOMLastSendToServerTime + ServerStatUpdateInterval)))
-        {
-        continue;
-        }
-      if (LOGLEVEL >= 9)
-        {
-        sprintf(log_buffer, "Connecting to pbs server %s", mom_servers[i].pbs_servername);
-        log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
-        }
-      // FIXME: Temporary workaround for the non-standard connection port numbers:
-      //        Calculate the ZMQ port number as generic tcp socket port plus difference between
-      //        predefined values.
-      //        In the future it have to be configurable as it done for generic tcp sockets ports.
-      unsigned int port = ntohs(mom_servers[i].sock_addr.sin_port)
-        + (PBS_STATUS_SERVICE_PORT - PBS_BATCH_SERVICE_PORT);
-      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(mom_servers[i].sock_addr), port);
-      if (rc != -1) // Success
-        {
-        connected = true;
-        }
-      servers_tried++;
-      }
-    if (!connected)
-      {
-      if (servers_tried > 0) // Error
-        {
-        log_err(-1, __func__, "Could not contact any of the servers to send an update");
-        rc = COULD_NOT_CONTACT_SERVER;
-        }
-      else // Not connected but no one error detected
-        {
-        rc = NO_SERVER_CONFIGURED;
-        }
-      }
-    }
-
-  return rc;
-  }
-
-#endif /* ZMQ */
 
 
 

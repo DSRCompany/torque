@@ -229,11 +229,6 @@ void net_add_close_func(int, void(*func)(int));
 int get_max_num_descriptors(void);
 int get_fdset_size(void);
 char * netaddr_pbs_net_t(pbs_net_t);
-#ifdef ZMQ
-int add_zconnection(enum zmq_connection_e id, void *socket, void *(*func)(void *), bool should_poll, bool connected);
-int init_znetwork(enum zmq_connection_e id, char *endpoint, void *(*readfunc)(void *), int socket_type);
-int wait_zrequest(time_t waittime, long *SState);
-#endif /* ZMQ */
 #ifdef __cplusplus
 }
 #endif

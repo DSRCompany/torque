@@ -105,12 +105,6 @@ char * netaddr_long(long ap, char *out);
 char * netaddr(struct sockaddr_in *ap);
 
 #ifdef ZMQ
-int  init_zmq();
-void deinit_zmq();
-int  init_zmq_connection(enum zmq_connection_e id, int socket_type);
-int  close_zmq_connection(enum zmq_connection_e id);
 int  init_znetwork(enum zmq_connection_e id, char *, void *(*readfunc)(void *), int);
-int  add_zconnection(enum zmq_connection_e, void *socket, void *(*func)(void *), bool should_poll, bool connected);
 int  wait_zrequest(time_t waittime, long *SState);
-void start_socket_thread(int id, void*(*func)(void*));
 #endif /* ZMQ */
