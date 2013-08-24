@@ -7,6 +7,7 @@
 
 #include "MomStatusMessage.hpp"
 #include "log.h"
+#include "pbs_nodes.h"
 
 
 namespace TrqJson {
@@ -47,8 +48,7 @@ int MomStatusMessage::readMergeJsonStatuses(const size_t size, const char *data)
   int updatesCount = 0;
   for (auto nodeStatus : body)
     {
-    // TODO: make const string
-    std::string nodeId = nodeStatus["node"].asString();
+    std::string nodeId = nodeStatus[JSON_NODE_ID_KEY].asString();
     if (!nodeId.empty())
       {
       updatesCount++;
@@ -59,6 +59,120 @@ int MomStatusMessage::readMergeJsonStatuses(const size_t size, const char *data)
   return(updatesCount);
 
   } /* END mom_read_json_status() */
+
+
+
+const char *MomStatusMessage::readStringGpuStatus(const char *statusStrings, Json::Value &status)
+  {
+  if (strcmp(statusStrings, START_GPU_STATUS))
+    {
+    return statusStrings; // Non-gpu status
+    }
+
+  Json::Value &gpuStatuses = status[GPU_STATUS_KEY];
+  Json::Value currentGpu;
+  std::string timestamp;
+  std::string driverVer;
+
+  const char *keyPtr = statusStrings + strlen(keyPtr) + 1;
+  for (; keyPtr && *keyPtr; keyPtr += strlen(keyPtr) + 1)
+    {
+    // Split each key-value pair by '=' character and set Json values.
+    const char *valPtr = strchr(keyPtr, '=');
+    if (!valPtr)
+      {
+      if (!strcmp(keyPtr, END_GPU_STATUS))
+        {
+        break;
+        }
+      // else
+      sprintf(log_buffer,"skipping unknown non key-value \"%s\"", keyPtr);
+      log_err(0, __func__, log_buffer);
+      continue;
+      }
+
+    std::string key(keyPtr, valPtr - keyPtr);
+    valPtr++; // Move beyond the '=' character
+
+    // get timestamp or driver version
+    if (!key.compare("timestamp"))
+      {
+      timestamp = valPtr;
+      continue;
+      }
+    if (!key.compare("driver_ver"))
+      {
+      driverVer = valPtr;
+      continue;
+      }
+
+    // start of new gpu status
+    if (!key.compare("gpuid") && !currentGpu.empty())
+      {
+      currentGpu["timestamp"] = timestamp;
+      currentGpu["driver_ver"] = driverVer;
+      gpuStatuses.append(currentGpu);
+      currentGpu.clear();
+      }
+    currentGpu[key] = valPtr;
+    }
+
+  if (!currentGpu.empty())
+    {
+    gpuStatuses.append(currentGpu);
+    }
+
+  return keyPtr;
+  }
+
+
+
+const char *MomStatusMessage::readStringMicStatus(const char *statusStrings, Json::Value &status)
+  {
+  if (strcmp(statusStrings, START_MIC_STATUS))
+    {
+    return statusStrings; // Non-gpu status
+    }
+
+  Json::Value &micStatus = status[MIC_STATUS_KEY];
+  Json::Value currentMic;
+
+  const char *keyPtr = statusStrings + strlen(keyPtr) + 1;
+  for (; keyPtr && *keyPtr; keyPtr += strlen(keyPtr) + 1)
+    {
+    // Split each key-value pair by '=' character and set Json values.
+    const char *valPtr = strchr(keyPtr, '=');
+    if (!valPtr)
+      {
+      if (!strcmp(keyPtr, END_MIC_STATUS))
+        {
+        break;
+        }
+      // else
+      sprintf(log_buffer,"skipping unknown non key-value \"%s\"", keyPtr);
+      log_err(0, __func__, log_buffer);
+      continue;
+      }
+
+    std::string key(keyPtr, valPtr - keyPtr);
+    valPtr++; // Move beyond the '=' character
+
+    // start of new mic status
+    if (!key.compare("mic_id") && !currentMic.empty())
+      {
+      micStatus.append(currentMic);
+      currentMic.clear();
+      }
+    currentMic[key] = valPtr;
+    }
+
+  if (!currentMic.empty())
+    {
+    micStatus.append(currentMic);
+    }
+
+  return keyPtr;
+  }
 
 
 
@@ -74,8 +188,21 @@ void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *sta
     const char *valPtr = strchr(keyPtr, '=');
     if (!valPtr)
       {
-      sprintf(log_buffer,"skipping non key-value pair \"%s\"", keyPtr);
-      log_err(0, __func__, log_buffer);
+      const char *newPtr;
+      newPtr = readStringGpuStatus(keyPtr, myStatus);
+      if (newPtr == keyPtr)
+        {
+        newPtr = readStringMicStatus(keyPtr, myStatus);
+        }
+      if (newPtr == keyPtr) // Non GPU and non MIC
+        {
+        sprintf(log_buffer,"skipping unknown non key-value \"%s\"", keyPtr);
+        log_err(0, __func__, log_buffer);
+        }
+      else
+        {
+        keyPtr = newPtr;
+        }
       continue;
       }
 

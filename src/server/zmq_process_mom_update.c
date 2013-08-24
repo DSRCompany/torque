@@ -74,7 +74,6 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
     {
     std::string gpuid;
     int gpuidx = -1;
-    int drv_ver;
 
     /* add the info to the "temp" attribute */
 
@@ -141,12 +140,12 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
       }
 
     /* get driver version, if there is one */
-    drv_ver = gpu_status["driver_ver"].asInt();
+    tmp_value = gpu_status["driver_ver"].asString();
     if (!tmp_value.empty())
       {
-      gpuinfo_stream << ";driver_ver=" << drv_ver;
+      gpuinfo_stream << ";driver_ver=" << tmp_value;
 
-      np->nd_gpusn[gpuidx].driver_ver = drv_ver;
+      np->nd_gpusn[gpuidx].driver_ver = atoi(tmp_value.c_str());
       }
 
     tmp_value = gpu_status["gpu_mode"].asString();
