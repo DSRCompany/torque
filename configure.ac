@@ -167,6 +167,7 @@ TCP sockets by configuring with --without-zeromq.
     [ AC_MSG_ERROR([TORQUE needs jsoncpp library if zeromq is enabled. Please install jsoncpp or configure with --without-zeromq]) ])
 fi
 
+AM_CONDITIONAL(ZMQ, test x"$have_zeromq" != "xno")
 AC_SUBST(TRANSPORTLIBS)
 
 
@@ -407,6 +408,9 @@ m4_ifdef([AM_SILENT_RULES],[
     src/lib/Libifl/test/tm/Makefile
     src/lib/Libifl/test/torquecfg/Makefile
     src/lib/Libifl/test/trq_auth/Makefile
+    src/lib/Libjson/test/Makefile
+    src/lib/Libjson/test/Message/Makefile
+    src/lib/Libjson/test/MomStatusMessage/Makefile
     src/lib/Libnet/test/Makefile
     src/lib/Libnet/test/conn_table/Makefile
     src/lib/Libnet/test/get_hostaddr/Makefile

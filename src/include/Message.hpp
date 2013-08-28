@@ -24,6 +24,8 @@ namespace TrqJson {
   class Message
     {
 
+    friend class TestHelper;
+
     private:
 
       /**
@@ -77,15 +79,16 @@ namespace TrqJson {
 
       /**
        * Dump all collected Json status messages into a character buffer.
-       * @return heap char array that have to be deallocated with free().
+       * @return new string object that have to be deallocated with deleteString() function passed
+       *         as the 'hint' argument.
        */
-      void write(std::string &out);
+      std::string *write();
 
       /**
        * Deallocate character buffer.
        * The function is designed to be passed to zmq_msg_init_data().
-       * @param data the buffer to be deallocated.
-       * @param hint isn't used.
+       * @param data isn't used.
+       * @param hint accept heap std::string argument. Will fail with any other types.
        */
       static void deleteString(void *data, void *hint);
 

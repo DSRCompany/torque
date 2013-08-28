@@ -24,20 +24,25 @@ int MomStatusMessage::readMergeJsonStatuses(const size_t size, const char *data)
   // read
   Json::Value root;
   Json::Reader reader;
-  bool parsingSuccessful = reader.parse(data, data + size - 1, root, false);
+  bool parsingSuccessful = reader.parse(data, data + size, root, false);
   if ( !parsingSuccessful )
     {
     // Can't read the message. Malformed?
     return -1;
     }
 
-  if (root["messageType"].asString() != "status")
+  Json::Value &messageType = root["messageType"];
+  if (!messageType.isString())
+    {
+    return -1;
+    }
+  if (messageType.asString() != "status")
     {
     // There is no 'messageType' key in the message
     return -1;
     }
 
-  const Json::Value body = root["body"];
+  const Json::Value &body = root["body"];
 
   if (!body.isArray())
     {
@@ -74,7 +79,7 @@ const char *MomStatusMessage::readStringGpuStatus(const char *statusStrings, Jso
   std::string timestamp;
   std::string driverVer;
 
-  const char *keyPtr = statusStrings + strlen(keyPtr) + 1;
+  const char *keyPtr = statusStrings + strlen(statusStrings) + 1;
   for (; keyPtr && *keyPtr; keyPtr += strlen(keyPtr) + 1)
     {
     // Split each key-value pair by '=' character and set Json values.
@@ -137,7 +142,7 @@ const char *MomStatusMessage::readStringMicStatus(const char *statusStrings, Jso
   Json::Value &micStatus = status[MIC_STATUS_KEY];
   Json::Value currentMic;
 
-  const char *keyPtr = statusStrings + strlen(keyPtr) + 1;
+  const char *keyPtr = statusStrings + strlen(statusStrings) + 1;
   for (; keyPtr && *keyPtr; keyPtr += strlen(keyPtr) + 1)
     {
     // Split each key-value pair by '=' character and set Json values.
@@ -178,6 +183,10 @@ const char *MomStatusMessage::readStringMicStatus(const char *statusStrings, Jso
 
 void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *statusStrings)
   {
+  if (nodeId == NULL || strlen(nodeId) == 0 || statusStrings == NULL || strlen(statusStrings) == 0)
+    {
+    return;
+    }
 
   Json::Value myStatus(Json::objectValue);
 
@@ -211,7 +220,7 @@ void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *sta
     myStatus[key] = valPtr;
     }
 
-    statusMap[nodeId] = myStatus;
+  statusMap[nodeId] = myStatus;
   } /* MomStatusMessage::readMergeStringStatus() */
 
 

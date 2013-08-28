@@ -5,6 +5,8 @@
 #include <string>
 #include <jsoncpp/json/json.h>
 #include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
 
 #include "Message.hpp"
 
@@ -51,7 +53,7 @@ void Message::generateHeader(Json::Value &root)
 
 
 
-void Message::write(std::string &out)
+std::string *Message::write()
   {
   Json::Value root;
   generateHeader(root);
@@ -64,7 +66,9 @@ void Message::write(std::string &out)
 #endif /* DEBUG */
   
   // Write the message and return char buffer
-  out = writer.write(root);
+  std::string *out = new std::string();
+  *out = writer.write(root);
+  return out;
   }
 
 
@@ -72,6 +76,10 @@ void Message::write(std::string &out)
 void Message::deleteString(void *data, void *hint)
   {
   (void)data; /* avoid 'unused' compiler warning */
+  if (hint == NULL)
+    {
+    return;
+    }
   delete((std::string *)hint);
   }
 

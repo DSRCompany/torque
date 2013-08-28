@@ -14,6 +14,8 @@ namespace TrqJson {
    */
   class MomStatusMessage : public Message
     {
+    /* Friend class for unit testing */
+    friend class TestHelper;
 
     private:
 

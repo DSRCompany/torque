@@ -40,10 +40,10 @@ int init_msg_json_status(zmq_msg_t *message)
   {
   // TODO: handle possible exceptions (std::bad_alloc)
   const char *message_data;
-  std::string *message_string = new std::string();
+  std::string *message_string;
 
   gs_received_json_statuses.setMomId(mom_alias);
-  gs_received_json_statuses.write(*message_string);
+  message_string = gs_received_json_statuses.write();
   message_data = message_string->c_str();
 
   return zmq_msg_init_data(message, (void *)message_data, message_string->length(),
