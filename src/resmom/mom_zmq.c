@@ -1,7 +1,6 @@
 #include <pbs_config.h>
 
 #ifdef ZMQ
-
 #include <zmq.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
@@ -93,101 +92,6 @@ int zmq_setopt_hwm(zmq_connection_e id, int value)
     {
     rc = zmq_setsockopt(g_svr_zconn[ZMQ_STATUS_SEND].socket, ZMQ_RCVHWM, &value, value_len);
     }
-  return rc;
-  }
-
-
-
-/**
- * Close the ZeroMQ status messages sending socket. Open it again and connect to all up-level MOMs
- * or to the PBS server if no MOM hierarchy received yet or if all MOMs down.
- * @return PBSE_NONE (0) if succeeded,
- *         NO_SERVER_CONFIGURED if no one server to connect found or
- *         COULD_NOT_CONTACT_SERVER if all connection attempts failed.
- */
-int update_status_connection()
-  {
-  int rc = PBSE_NONE;
-  node_comm_t *nc = NULL;
-  bool connected = false;
-
-  if (LOGLEVEL >= 9)
-    {
-    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "Update status port connections");
-    }
-
-  close_zmq_connection(ZMQ_STATUS_SEND);
-  zmq_setopt_hwm(ZMQ_STATUS_SEND, 1);
-
-  // Try to connect to all nodes of a level.
-  nc = update_current_path(mh);
-  if (nc != NULL)
-    {
-    node_comm_t *first_node= nc;
-    do
-      {
-      if (LOGLEVEL >= 9)
-        {
-        sprintf(log_buffer, "Connecting to node %s", nc->name);
-        log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
-        }
-      unsigned int port = ntohs(nc->sock_addr.sin_port);
-      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(nc->sock_addr), port);
-      if (rc != -1) // Success
-        {
-        connected = true;
-        }
-      nc = update_current_path(mh);
-      }
-    while (nc && nc != first_node);
-    }
-
-  rc = PBSE_NONE;
-
-  // If connected to no one node try to connect to one of the servers.
-  if (!connected)
-    {
-    int servers_tried = 0;
-    /* now, once we contact one server we stop attempting to report in */
-    for (int i = 0; i < PBS_MAXSERVER; i++)
-      {
-      if ((mom_servers[i].pbs_servername[0] == '\0') ||
-          (time_now < (mom_servers[i].MOMLastSendToServerTime + ServerStatUpdateInterval)))
-        {
-        continue;
-        }
-      if (LOGLEVEL >= 9)
-        {
-        sprintf(log_buffer, "Connecting to pbs server %s", mom_servers[i].pbs_servername);
-        log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
-        }
-      // FIXME: Temporary workaround for the non-standard connection port numbers:
-      //        Calculate the ZMQ port number as generic tcp socket port plus difference between
-      //        predefined values.
-      //        In the future it have to be configurable as it done for generic tcp sockets ports.
-      unsigned int port = ntohs(mom_servers[i].sock_addr.sin_port)
-        + (PBS_STATUS_SERVICE_PORT - PBS_BATCH_SERVICE_PORT);
-      rc = zmq_connect_sockaddr(ZMQ_STATUS_SEND, &(mom_servers[i].sock_addr), port);
-      if (rc != -1) // Success
-        {
-        connected = true;
-        }
-      servers_tried++;
-      }
-    if (!connected)
-      {
-      if (servers_tried > 0) // Error
-        {
-        log_err(-1, __func__, "Could not contact any of the servers to send an update");
-        rc = COULD_NOT_CONTACT_SERVER;
-        }
-      else // Not connected but no one error detected
-        {
-        rc = NO_SERVER_CONFIGURED;
-        }
-      }
-    }
-
   return rc;
   }
 

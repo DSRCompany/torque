@@ -5,9 +5,9 @@
 #include <zmq.h>
 
 #include "log.h"
-#include "zmq_process_status.h"
+#include "mom_zstatus.h"
 
-
+extern TrqZStatus::ZStatus *g_zstatus;
 
 /**
  * A handler for processing incoming status messages in Json format on a ZeroMQ socket.
@@ -99,7 +99,8 @@ void *status_request(
           sprintf(log_buffer, "ZMQ Message Data: %.*s", (int)sz, (char *)data);
           log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_NODE, __func__, log_buffer);
           }
-        mom_read_json_status(sz, data);
+
+        g_zstatus->readStatus(sz, data);        
         }
       }
 

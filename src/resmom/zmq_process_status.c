@@ -25,44 +25,6 @@ extern int  maxupdatesbeforesending;
 
 
 /**
- * Parse and handle mom status message from the given buffer.
- * @param sz data buffer size.
- * @param data message data buffer.
- * @return 0 if succeeded or -1 otherwise.
- */
-int mom_read_json_status(size_t sz, char *data)
-  {
-  int rc;
-
-  rc = gs_received_json_statuses.readMergeJsonStatuses(sz, data);
-
-  if (rc > 0)
-    {
-    rc = 0;
-
-    updates_waiting_to_send++;
-  
-    if (updates_waiting_to_send >= maxupdatesbeforesending)
-      {
-      if (LOGLEVEL >= 3)
-        {
-        snprintf(log_buffer, sizeof(log_buffer),
-          "Forcing update because I have received %d updates", 
-          updates_waiting_to_send);
-        log_event(PBSEVENT_SYSTEM, PBS_EVENTCLASS_NODE, __func__, log_buffer);
-        }
-
-      send_update_soon();
-      }
-    }
-  
-  return(rc);
-  
-  } /* END mom_read_json_status() */
-
-
-
-/**
  * Update this MOM status message in the global statuses map with the values from the given
  * status_strings dynamic string.
  * @param status_strings dynamic string containing this MOM status.

@@ -50,6 +50,7 @@
 #include "zmq_recv_comm.h"
 #include "mom_zmq.h"
 #include "../lib/Libnet/zmq_common.h"
+#include "mom_zstatus.h"
 #endif /* ZMQ */
 #include "libpbs.h"
 #include "pbs_ifl.h"
@@ -214,6 +215,9 @@ resizable_array  *exiting_job_list;
 resizable_array  *things_to_resend;
 
 mom_hierarchy_t  *mh;
+#ifdef ZMQ
+TrqZStatus::ZStatus *g_zstatus = NULL;
+#endif /* ZMQ */
 
 #ifdef PENABLE_LINUX26_CPUSETS
 node_internals   internal_layout;
@@ -5142,6 +5146,9 @@ int setup_program_environment(void)
       log_err(-1, msg_daemonname, "can't create ZMQ socket");
       return(3);
       }
+
+    /* Initialize status handling and sending stuff */
+    g_zstatus = new TrqZStatus::ZStatus(mh, mom_alias);
     }
 #endif /* ZMQ */
 
@@ -5244,11 +5251,6 @@ int setup_program_environment(void)
     }
 
   srand(get_random_number());
-
-#ifdef ZMQ
-  // Connect ZeroMQ status sending socket.
-  update_status_connection();
-#endif /* ZMQ */
 
   return(PBSE_NONE);
   }  /* END setup_program_environment() */

@@ -215,8 +215,7 @@
 #endif
 #ifdef ZMQ
 #include "mom_zmq.h"
-#include "zmq_send_comm.h"
-#include "zmq_process_status.h"
+#include "mom_zstatus.h"
 #endif /* ZMQ */
 
 #include "pbs_ifl.h"
@@ -314,6 +313,7 @@ extern int  use_nvidia_gpu;
 #ifdef ZMQ
 extern bool g_use_zmq;
 extern struct zconnection_s g_svr_zconn[];
+extern TrqZStatus::ZStatus *g_zstatus;
 #endif /* ZMQ */
 
 void check_state(int);
@@ -1565,18 +1565,8 @@ void mom_server_all_update_stat(void)
       }
     else /* !g_use_zmq */
       {
-      update_my_json_status(mom_status->str);
-      rc = zmq_send_status(mom_status->str);
-      if (rc < 0)
-        {
-        // Try to reconnect. Probably all MOMs are disappeared and the connection have to be
-        // directed to pbs servers.
-        rc = update_status_connection();
-        if (rc >= 0)
-          {
-          rc = zmq_send_status(mom_status->str);
-          }
-        }
+      g_zstatus->updateMyJsonStatus(mom_status->str);
+      rc = g_zstatus->sendStatus();
       if (rc >= 0)
         {
         LastServerUpdateTime = time_now;
@@ -2239,7 +2229,11 @@ int read_cluster_addresses(
 #ifdef ZMQ
   if (g_use_zmq)
     {
-    update_status_connection();
+    if (g_zstatus)
+      {
+      delete g_zstatus;
+      }
+    g_zstatus = new TrqZStatus::ZStatus(mh, mom_alias);
     }
 #endif /* ZMQ */
 
