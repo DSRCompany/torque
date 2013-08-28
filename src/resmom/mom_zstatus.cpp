@@ -237,10 +237,10 @@ namespace TrqZStatus
   int ZStatus::initMsgJsonStatus(zmq_msg_t *message)
   {
     const char *message_data;
-    std::string *message_string = new std::string();
+    std::string *message_string;
 
     m_json_status.setMomId(m_mom_alias);
-    m_json_status.write(*message_string);
+    message_string = m_json_status.write();
     message_data = message_string->c_str();
 
     return zmq_msg_init_data(message, (void *)message_data, message_string->length(),
