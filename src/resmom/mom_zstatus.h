@@ -27,6 +27,8 @@ namespace TrqZStatus
 
     int readStatus(size_t sz, char *data);
 
+    void clearStatusCache();
+
   private:
     TrqJson::MomStatusMessage m_json_status;
     std::vector<void *> m_zmq_socket;

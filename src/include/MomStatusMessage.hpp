@@ -72,6 +72,11 @@ namespace TrqJson {
        */
       void readMergeStringStatus(const char *nodeId, const char *statusStrings);
 
+      /**
+       * Clear the current message data.
+       */
+      void clear();
+
     }; /* class MomStatusMessage */
 
 } /* namespace TrqJson */

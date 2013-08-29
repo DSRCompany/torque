@@ -1569,6 +1569,7 @@ void mom_server_all_update_stat(void)
       rc = g_zstatus->sendStatus();
       if (rc >= 0)
         {
+        g_zstatus->clearStatusCache();
         LastServerUpdateTime = time_now;
         UpdateFailCount = 0;
         }

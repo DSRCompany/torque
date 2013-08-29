@@ -354,6 +354,11 @@ namespace TrqZStatus
     return ret;
   }
 
+  void ZStatus::clearStatusCache()
+  {
+    m_json_status.clear();
+  }
+
 } /* namespace TrqZStatus */
 
 

@@ -242,6 +242,11 @@ std::string MomStatusMessage::getMessageType()
 
 
 
+void MomStatusMessage::clear()
+  {
+  statusMap.clear();
+  }
+
 } /* namespace TrqJson */
 
 #endif /* ZMQ */
