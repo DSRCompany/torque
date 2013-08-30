@@ -51,13 +51,13 @@ int MomStatusMessage::readMergeJsonStatuses(const size_t size, const char *data)
     }
 
   int updatesCount = 0;
-  for (auto nodeStatus : body)
+  for (unsigned int i = 0; i < body.size(); i++)
     {
-    std::string nodeId = nodeStatus[JSON_NODE_ID_KEY].asString();
+    std::string nodeId = body[i][JSON_NODE_ID_KEY].asString();
     if (!nodeId.empty())
       {
       updatesCount++;
-      statusMap[nodeId] = nodeStatus;
+      statusMap[nodeId] = body[i];
       }
     }
 
@@ -227,9 +227,9 @@ void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *sta
 
 void MomStatusMessage::generateBody(Json::Value &messageBody)
   {
-  for (auto status : statusMap)
+  for (std::map<std::string, Json::Value>::const_iterator it = statusMap.begin(); it != statusMap.end(); it++)
     {
-    messageBody.append(status.second);
+    messageBody.append((*it).second);
     }
   } /* MomStatusMessage::createBody() */
 
