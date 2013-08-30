@@ -10,7 +10,6 @@
 #include "log.h"
 #include "pbs_error.h"
 #include "mom_hierarchy.h"
-#include "lib_net.h"
 #include "pbs_ifl.h"
 #include "resmon.h"
 #include "mom_server.h"
