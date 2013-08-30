@@ -105,6 +105,6 @@ char * netaddr_long(long ap, char *out);
 char * netaddr(struct sockaddr_in *ap);
 
 #ifdef ZMQ
-int  init_znetwork(enum zmq_connection_e id, char *, void *(*readfunc)(void *), int);
+int  init_znetwork(enum zmq_connection_e id, const char *, void *(*readfunc)(void *), int);
 int  wait_zrequest(time_t waittime, long *SState);
 #endif /* ZMQ */

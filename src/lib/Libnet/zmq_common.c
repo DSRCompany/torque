@@ -28,7 +28,7 @@ struct zconnection_s g_svr_zconn[ZMQ_CONNECTION_COUNT] = {};
 /**
  * Pointer to the array containing items to be polled
  */
-zmq_pollitem_t *gs_zmq_poll_list = NULL;
+zmq_pollitem_t *g_zmq_poll_list = NULL;
 
 
 
@@ -87,23 +87,24 @@ int close_zmq_socket(void *socket)
 int init_zmq()
   {
   // Allocate the poll array of the max allowed size. This could be optimized in the future.
-  gs_zmq_poll_list = (zmq_pollitem_t *)calloc(get_max_num_descriptors(), sizeof(zmq_pollitem_t));
-  if (!gs_zmq_poll_list)
+  g_zmq_poll_list = (zmq_pollitem_t *)calloc(get_max_num_descriptors() + ZMQ_CONNECTION_COUNT,
+      sizeof(zmq_pollitem_t));
+  if (!g_zmq_poll_list)
     {
-    log_err(errno, __func__, "can't allocate memory for gs_zmq_poll_list array");
+    log_err(errno, __func__, "can't allocate memory for g_zmq_poll_list array");
     return -1;
     }
  
   // We'll only perform ZMQ_POLLIN poll requests on the list items so init the events here.
   for (int i = 0; i < get_max_num_descriptors(); i++) {
-    gs_zmq_poll_list[i].events = ZMQ_POLLIN;
+    g_zmq_poll_list[i].events = ZMQ_POLLIN;
   }
 
   g_zmq_context = zmq_ctx_new();
   if (!g_zmq_context)
     {
     log_err(errno, __func__, "can't create ZeroMQ context");
-    free(gs_zmq_poll_list);
+    free(g_zmq_poll_list);
     return -1;
     }
 
@@ -140,9 +141,9 @@ void deinit_zmq()
 
   // Dealloc global data structures
 
-  if (gs_zmq_poll_list)
+  if (g_zmq_poll_list)
     {
-    free(gs_zmq_poll_list);
+    free(g_zmq_poll_list);
     }
   }
 

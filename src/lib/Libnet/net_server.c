@@ -495,14 +495,14 @@ int init_network(
  */
 int init_znetwork(
     enum zmq_connection_e id,  /* Connection id (array index) */
-    char *endpoint,            /* Connection URL */
+    const char *endpoint,      /* Connection URL */
     void *(*readfunc)(void *), /* Function to invoke on data ready to read */
     int  socket_type)          /* ZMQ connection type */
   {
   void *socket;
   int  rc;
 
-  if (!g_zmq_context || !g_zmq_context || !readfunc || id >= ZMQ_CONNECTION_COUNT)
+  if (!g_zmq_context || !g_zmq_context || !readfunc || id < 0 || id >= ZMQ_CONNECTION_COUNT)
     {
     log_err(-1, __func__, "wrong arguments specified");
     return(-1);
@@ -526,9 +526,9 @@ int init_znetwork(
     return(-1);
     }
 
-  add_zconnection(id, socket, readfunc, true, true);
+  rc = add_zconnection(id, socket, readfunc, true, true);
 
-  return(PBSE_NONE);
+  return(rc);
   }
 
 #endif /* ZMQ */
@@ -860,6 +860,11 @@ int wait_zrequest(
   
   /* selset = readset;*/  /* readset is global */
   MaxNumDescriptors = get_max_num_descriptors();
+  if (MaxNumDescriptors <= 0)
+    {
+    pthread_mutex_unlock(global_sock_read_mutex);
+    return(-1);
+    }
   SetSize = MaxNumDescriptors*sizeof(u_long);
 
   SocketAddrSet = (u_long *)malloc(SetSize);
@@ -881,7 +886,7 @@ int wait_zrequest(
     if (FD_ISSET(i, GlobalSocketReadSet))
       {
       // Update/set the corresponding poll item.
-      zmq_pollitem_t *current = &(gs_zmq_poll_list[poll_size]);
+      zmq_pollitem_t *current = &(g_zmq_poll_list[poll_size]);
       if (current->fd != i)
         {
         current->fd = i;
@@ -898,15 +903,15 @@ int wait_zrequest(
     {
     if (g_svr_zconn[i].socket != NULL && g_svr_zconn[i].should_poll)
       {
-      gs_zmq_poll_list[poll_size].socket = g_svr_zconn[i].socket;
-      gs_zmq_poll_list[poll_size].events = ZMQ_POLLIN;
+      g_zmq_poll_list[poll_size].socket = g_svr_zconn[i].socket;
+      g_zmq_poll_list[poll_size].events = ZMQ_POLLIN;
       poll_size++;
       }
     }
 
   pthread_mutex_unlock(global_sock_read_mutex);
 
-  n = zmq_poll (gs_zmq_poll_list, poll_size, waittime * 1000 /* msec */);
+  n = zmq_poll (g_zmq_poll_list, poll_size, waittime * 1000 /* msec */);
 
   if (n == -1)
     {
@@ -927,18 +932,18 @@ int wait_zrequest(
 
       for (i = 0; i < poll_size; i++)
         {
-        if (gs_zmq_poll_list[i].socket || (gs_zmq_poll_list[i].revents & ZMQ_POLLIN))
+        if (g_zmq_poll_list[i].socket || (g_zmq_poll_list[i].revents & ZMQ_POLLIN))
           {
           continue;
           }
-        if (fstat(gs_zmq_poll_list[i].fd, &fbuf) == 0)
+        if (fstat(g_zmq_poll_list[i].fd, &fbuf) == 0)
           {
           continue;
           }
 
         /* clean up SdList and bad sd... */
 
-        globalset_del_sock(gs_zmq_poll_list[i].fd);
+        globalset_del_sock(g_zmq_poll_list[i].fd);
         } /* END for each socket in global read set */
 
       free(SocketAddrSet);
@@ -953,16 +958,16 @@ int wait_zrequest(
   int zconn_idx = 0;
   for (i = 0; (i < (poll_size)) && (n > 0); i++)
     {
-    if (gs_zmq_poll_list[i].revents & ZMQ_POLLIN)
+    if (g_zmq_poll_list[i].revents & ZMQ_POLLIN)
       {
       n--;
-      if (gs_zmq_poll_list[i].socket)
+      if (g_zmq_poll_list[i].socket)
         {
         // Handle ZMQ socket
         // Find corresponding item in ZMQ listeners array
         // NOTE: the ZMQ sockets orders are the same in the g_svr_zconn and in the poll list.
         while (zconn_idx < ZMQ_CONNECTION_COUNT
-            && g_svr_zconn[zconn_idx].socket != gs_zmq_poll_list[i].socket)
+            && g_svr_zconn[zconn_idx].socket != g_zmq_poll_list[i].socket)
           {
           zconn_idx++;
           }
@@ -980,7 +985,7 @@ int wait_zrequest(
         }
       else
         {
-        int fd = gs_zmq_poll_list[i].fd;
+        int fd = g_zmq_poll_list[i].fd;
         // Handle standard socket
 
         pthread_mutex_lock(svr_conn[fd].cn_mutex);
@@ -1048,12 +1053,12 @@ int wait_zrequest(
     struct connection *cp;
     int fd;
 
-    if (gs_zmq_poll_list[i].socket)
+    if (g_zmq_poll_list[i].socket)
       {
       continue;
       }
 
-    fd = gs_zmq_poll_list[i].fd;
+    fd = g_zmq_poll_list[i].fd;
     pthread_mutex_lock(svr_conn[fd].cn_mutex);
 
     cp = &svr_conn[fd];

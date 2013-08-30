@@ -19,7 +19,7 @@ int add_zconnection(enum zmq_connection_e id, void *socket, void *(*func)(void *
 
 extern void  *g_zmq_context;
 extern struct zconnection_s g_svr_zconn[];
-extern zmq_pollitem_t *gs_zmq_poll_list;
+extern zmq_pollitem_t *g_zmq_poll_list;
 
 #endif /* ZMQ */
 
