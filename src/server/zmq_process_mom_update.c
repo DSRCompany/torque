@@ -70,8 +70,9 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
     return(DIS_NOCOMMIT);
     }
 
-  for (auto gpu_status : gpus_status)
+  for (unsigned int i = 0; i < gpus_status.size(); i++)
     {
+    Json::Value gpu_status = gpus_status[i];
     std::string gpuid;
     int gpuidx = -1;
 
@@ -246,7 +247,7 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
     
     /* mark that this gpu node is not virtual */
     np->nd_gpus_real = TRUE;
-    } /* END of for (auto gpu_status : gpus_status) */
+    } /* END */
 
   /* maintain the gpu count, if it has changed we need to update the nodes file */
 
@@ -304,8 +305,9 @@ int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
     return(DIS_NOCOMMIT);
     }
 
-  for (auto mic_status : mics_status)
+  for (unsigned int i = 0; i < mics_status.size(); i++)
     {
+    Json::Value mic_status = mics_status[i];
     std::string micid;
 
     /* add the info to the "temp" attribute */
@@ -330,8 +332,9 @@ int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
     micinfo_stream << "mic[" << mic_count << "]=" << micid;
 
     // Print all other mic status values
-    for (auto key : mic_status.getMemberNames())
+    for (unsigned int i = 0; i < mic_status.getMemberNames().size(); i++)
       {
+      std::string key = mic_status.getMemberNames()[i];
       if (key.compare("micid"))
         {
         continue;
@@ -353,7 +356,7 @@ int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
     micinfo_stream.str("");
     micinfo_stream.clear();
     
-    } /* END of for (auto gpu_status : gpus_status) */
+    } /* END */
 
   if (mic_count > np->nd_nmics)
     {
@@ -440,8 +443,9 @@ int pbs_read_json_status(size_t sz, char *data)
   get_svr_attr_l(SRV_ATR_AutoNodeNP, &auto_np);
   get_svr_attr_l(SRV_ATR_DownOnError, &down_on_error);
 
-  for (auto node_status : body)
+  for (unsigned int i = 0; i < body.size(); i++)
     {
+    Json::Value node_status = body[i];
     pbs_attribute temp;
     Json::Value temp_value;
     bool dont_change_state = false;
