@@ -272,4 +272,135 @@ int add_zconnection(
   return(PBSE_NONE);
   }  /* END add_zconnection() */
 
+
+
+/**
+ * A handler for processing incoming status messages in Json format on a ZeroMQ socket. Read all
+ * messages from the given socket and call the given handler for each message data.
+ *
+ * If wait argument is set to true the function returns only if an error would be detectd.
+ *
+ * If wait argument is set to false the function will return when no more messages could be read or
+ * if an error detected.
+ *
+ * The function doesn't check for any error returned by func handler.
+ *
+ * @param zsock pointer to ZeroMQ socket ready to be read for data.
+ * @param func pointer to a data handler.
+ * @param wait the socket read operation will be performed in blocking mode if true and non-blocing
+ *        if false.
+ * @return 0 if no errors 
+ */
+int process_status_request(
+
+  void *zsock,
+  int (*func)(const size_t, const char *),
+  bool wait
+
+  )
+
+  {
+  // By 0MQ design the message would consist at least of 2 parts:
+  // 1. sender ID
+  // 2. first part of the message data
+  // By our design messages would consist of the only 2 these parts.
+  zmq_msg_t part;
+  int msg_part_number = 0;
+  bool close_msg = false;
+  int more = true;
+  size_t more_size = sizeof more;
+  int rc = 0;
+
+  // Read all messages received for this time
+  while(true)
+    {
+    rc = zmq_msg_init(&part);
+    if (rc != 0)
+      {
+      log_err(errno, __func__, "can't init recv message");
+      break;
+      }
+    close_msg = true;
+
+    // Receive the message
+    rc = zmq_msg_recv(&part, zsock, wait ? 0 : ZMQ_DONTWAIT);
+    if (rc == -1)
+      {
+      // errno = EAGAIN means there is no message to receive
+      if (errno == EAGAIN)
+        {
+        rc = 0;
+        }
+      else
+        {
+        log_err(errno, __func__, "can't recv message");
+        }
+      break;
+      }
+
+    // Check if there are more part(s)
+    rc = zmq_getsockopt(zsock, ZMQ_RCVMORE, &more, &more_size);
+    if (rc != 0)
+      {
+      log_err(errno, __func__, "can't get socket option");
+      break;
+      }
+
+    // Process the only first two message parts if multipart. These parts are ID and the message.
+    // Process the only first part if non-multipart. The part is the message.
+    // Skip other parts if present
+    if (msg_part_number < 2)
+      {
+      // Get message data
+      size_t sz = zmq_msg_size(&part);
+      char *data = (char *)zmq_msg_data(&part);
+      if (!data)
+        {
+        log_err(errno, __func__, "can't get message data");
+        break;
+        }
+
+      // Got well formed message without errors.
+      // Process the message
+      if (msg_part_number == 0 && more)
+        {
+        // First part of a multipart message: client ID
+        // Do nothing
+        }
+      else
+        {
+        // Non-multipart or second part of a multipart message: data
+        func(sz, data);        
+        }
+      }
+
+    // Deinit the message
+    close_msg = false;
+    if (zmq_msg_close(&part) != 0)
+      {
+      log_err(errno, __func__, "error close ZMQ message");
+      }
+
+    // Update part number
+    if (more)
+      {
+      msg_part_number++;
+      }
+    else
+      {
+      msg_part_number = 0;
+      }
+    }
+  // Cleanup after break
+  if (close_msg)
+    {
+    if (zmq_msg_close(&part) != 0)
+      {
+      log_err(errno, __func__, "error close ZMQ message");
+      }
+    }
+
+  return(rc);
+  }  /* END process_status_request() */
+
 #endif /* ZMQ */

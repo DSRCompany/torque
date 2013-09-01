@@ -393,7 +393,7 @@ int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
  *         SEND_HELLO if a node requested hello message from the server or
  *         -1 otherwise.
  */
-int pbs_read_json_status(size_t sz, char *data)
+int pbs_read_json_status(const size_t sz, const char *data)
   {
   long              mom_job_sync = 0;
   long              auto_np = 0;

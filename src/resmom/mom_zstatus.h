@@ -23,9 +23,9 @@ namespace TrqZStatus
 
 
     int sendStatus();
-    void updateMyJsonStatus(char *status_strings);
+    void updateMyJsonStatus(const char *status_strings);
 
-    int readStatus(size_t sz, char *data);
+    int readStatus(const size_t sz, const char *data);
 
     void clearStatusCache();
 

@@ -73,7 +73,7 @@ namespace TrqZStatus
   * @param data message data buffer.
   * @return 0 if succeeded or -1 otherwise.
   */
-  int ZStatus::readStatus(size_t sz, char *data)
+  int ZStatus::readStatus(const size_t sz, const char *data)
   {
     return m_json_status.readMergeJsonStatuses(sz, data);
   }
@@ -84,7 +84,7 @@ namespace TrqZStatus
   * @param status_strings dynamic string containing this MOM status.
   * @return nothing
   */
-  void ZStatus::updateMyJsonStatus(char *status_strings)
+  void ZStatus::updateMyJsonStatus(const char *status_strings)
   {
     m_json_status.readMergeStringStatus(m_mom_alias, status_strings);
   }

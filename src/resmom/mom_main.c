@@ -47,7 +47,6 @@
 #include <dirent.h>
 #include <libxml/parser.h>
 #ifdef ZMQ
-#include "zmq_recv_comm.h"
 #include "mom_zmq.h"
 #include "../lib/Libnet/zmq_common.h"
 #include "mom_zstatus.h"
@@ -3257,6 +3256,35 @@ void *tcp_request(
 
   return(NULL);
   }  /* END tcp_request() */
+
+
+
+#ifdef ZMQ
+
+/**
+ * Read status callback interface implementation for process_status_request() call.
+ * It's needed to call class method.
+ */
+static int read_status(const size_t sz, const char *data)
+  {
+  return g_zstatus->readStatus(sz, data);
+  }
+
+
+
+/**
+ * A handler for processing incoming status messages in Json format on a ZeroMQ socket.
+ * @param args handler arguments list (void **). For this handler the list have to contain a pointer
+ * to the ZeroMQ socket to be read for data.
+ */
+static void *status_request(void *args)
+  {
+  void *zsock = *(void **)args;
+  process_status_request(zsock, read_status, false);        
+  return(NULL);
+  }  /* END status_request() */
+
+#endif /* ZMQ */
 
 
 

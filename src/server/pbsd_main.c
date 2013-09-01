@@ -105,7 +105,7 @@
 #include <libxml/parser.h>
 #ifdef ZMQ
 #include "../lib/Libnet/zmq_common.h"
-#include "zmq_receive_mom_communication.h"
+#include "zmq_process_mom_update.h"
 #endif /* ZMQ */
 #include "list_link.h"
 #include "work_task.h"
@@ -544,10 +544,23 @@ void *start_process_pbs_server_port(
 #ifdef ZMQ
 
 /**
+ * Process ZeroMQ MOM status receiving port. Read and process all the received messages.
+ * The function blocks while no errors detected.
+ * @param zsock ready to be read ZeroMQ socket.
+ */
+static void *start_process_pbs_status_port(void *zsock)
+  {
+  process_status_request(zsock, pbs_read_json_status, true);
+  return(NULL);
+  }
+
+
+
+/**
  * ZeroMQ MOM status receiving thread worker. Once started it blocks reading all incoming messages.
  * @param zsock ready to be read ZeroMQ socket.
  */
-void *process_pbs_status_port_thread(
+static void *process_pbs_status_port_thread(
   void *zsock)
 {
   while(true)

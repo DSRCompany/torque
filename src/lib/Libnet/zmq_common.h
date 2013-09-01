@@ -16,6 +16,7 @@ int init_zmq_connection(enum zmq_connection_e id, int  socket_type);
 int close_zmq_connection(enum zmq_connection_e id);
 int add_zconnection(enum zmq_connection_e id, void *socket, void *(*func)(void *), bool should_poll,
     bool connected);
+int process_status_request(void *zsock, int (*func)(const size_t, const char *), bool wait);
 
 extern void  *g_zmq_context;
 extern struct zconnection_s g_svr_zconn[];

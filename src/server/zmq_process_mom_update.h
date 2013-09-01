@@ -5,7 +5,7 @@
 
 #ifdef ZMQ
 
-int pbs_read_json_status(size_t sz, char *data);
+int pbs_read_json_status(const size_t sz, const char *data);
 
 #endif /* ZMQ */
 
