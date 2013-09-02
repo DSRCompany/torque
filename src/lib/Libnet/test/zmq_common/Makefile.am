@@ -8,7 +8,6 @@ AM_LDFLAGS = @CHECK_LIBS@ ${lib_LTLIBRARIES}
 
 check_PROGRAMS = test_zmq_common
 
-# ${PROG_ROOT}/zmq_common.c is directly included to the test to access static variables
 libzmq_common_la_SOURCES = scaffolding.c ${PROG_ROOT}/zmq_common.c
 libzmq_common_la_LDFLAGS = @CHECK_LIBS@ -shared -lgcov
 
