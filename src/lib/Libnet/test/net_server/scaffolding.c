@@ -43,25 +43,17 @@ char *get_cached_nameinfo(
 
 void log_event(int eventtype, int objclass, const char *objname, const char *text)
   {
-  fprintf(stderr, "The call to log_event needs to be mocked!!\n");
   exit(1);
   }
 
 void initialize_connections_table()
   {
-  fprintf(stderr, "The call to initialize_connections_table needs to be mocked!!\n");
   exit(1);
   }
 
 char *PAddrToString(pbs_net_t *Addr)
   {
-  fprintf(stderr, "The call to PAddrToString needs to be mocked!!\n");
   exit(1);
-  }
-
-int get_max_num_descriptors(void)
-  {
-  return g_get_max_num_descriptors_ret;
   }
 
 int get_fdset_size(void)
@@ -74,7 +66,10 @@ void log_err(int errnum, const char *routine, const char *text)
   // Do nothing, assume never fail
   }
 
-void log_record(int eventtype, int objclass, const char *objname, const char *text) {}
+void log_record(int eventtype, int objclass, const char *objname, const char *text)
+  {
+  exit(1);
+  }
 
 int pbs_getaddrinfo(const char *pNode,struct addrinfo *pHints,struct addrinfo **ppAddrInfoOut)
   {
@@ -120,6 +115,12 @@ int zmq_poll (zmq_pollitem_t *items, int nitems, long timeout)
 
 extern "C" {
 
+/* return max descriptors number */
+int get_max_num_descriptors(void)
+  {
+  return g_get_max_num_descriptors_ret;
+  }
+
 /* return 0 if no error */
 int pthread_mutex_lock(pthread_mutex_t *mutex) throw()
   {
@@ -137,7 +138,6 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex) throw()
 /* return 0 if no error */
 int fstat(int fildes, struct stat *buf) throw()
   {
-  printf("FSTAT: fd: %d, bd: %d\n", fildes, g_fstat_bad_descriptor);
   if (fildes == g_fstat_bad_descriptor)
     {
     return -1;
