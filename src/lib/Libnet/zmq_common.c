@@ -86,9 +86,18 @@ int close_zmq_socket(void *socket)
  */
 int init_zmq()
   {
+  g_zmq_poll_list = NULL;
+  g_zmq_context = NULL;
+
+  int poll_list_length = get_max_num_descriptors();
+  if (poll_list_length <= 0)
+    {
+    return -1;
+    }
+  poll_list_length += ZMQ_CONNECTION_COUNT;
+
   // Allocate the poll array of the max allowed size. This could be optimized in the future.
-  g_zmq_poll_list = (zmq_pollitem_t *)calloc(get_max_num_descriptors() + ZMQ_CONNECTION_COUNT,
-      sizeof(zmq_pollitem_t));
+  g_zmq_poll_list = (zmq_pollitem_t *)calloc(poll_list_length, sizeof(zmq_pollitem_t));
   if (!g_zmq_poll_list)
     {
     log_err(errno, __func__, "can't allocate memory for g_zmq_poll_list array");
@@ -96,7 +105,7 @@ int init_zmq()
     }
  
   // We'll only perform ZMQ_POLLIN poll requests on the list items so init the events here.
-  for (int i = 0; i < get_max_num_descriptors(); i++) {
+  for (int i = 0; i < poll_list_length; i++) {
     g_zmq_poll_list[i].events = ZMQ_POLLIN;
   }
 
@@ -105,6 +114,7 @@ int init_zmq()
     {
     log_err(errno, __func__, "can't create ZeroMQ context");
     free(g_zmq_poll_list);
+    g_zmq_poll_list = NULL;
     return -1;
     }
 
@@ -133,10 +143,12 @@ void deinit_zmq()
       }
 
       close_zmq_socket(socket);
+      g_svr_zconn[i].socket = NULL;
       }
 
     // Destroy ZMQ context
     zmq_ctx_destroy(g_zmq_context);
+    g_zmq_context = NULL;
     }
 
   // Dealloc global data structures
@@ -144,6 +156,7 @@ void deinit_zmq()
   if (g_zmq_poll_list)
     {
     free(g_zmq_poll_list);
+    g_zmq_poll_list = NULL;
     }
   }
 
@@ -161,7 +174,7 @@ int init_zmq_connection(
     int  socket_type)
 
   {
-  if (!g_zmq_context || id >= ZMQ_CONNECTION_COUNT)
+  if (!g_zmq_context || id < 0 || id >= ZMQ_CONNECTION_COUNT)
     {
     log_err(-1, __func__, "wrong arguments specified");
     return -1;
@@ -195,7 +208,7 @@ int close_zmq_connection(
   int socket_type;
   size_t socket_type_length = sizeof(socket_type);
 
-  if (!g_zmq_context || id >= ZMQ_CONNECTION_COUNT)
+  if (!g_zmq_context || id < 0 || id >= ZMQ_CONNECTION_COUNT)
     {
     log_err(-1, __func__, "wrong arguments specified");
     return(-1);
@@ -219,16 +232,17 @@ int close_zmq_connection(
     log_err(rc, __func__, "unable to get socket option");
     return -1;
     }
-  rc = close_zmq_socket(socket);
 
+  rc = close_zmq_socket(socket);
   if (rc)
     {
     log_err(rc, __func__, "unable to deinit ZMQ socket");
     return -1;
     }
+  
+  g_svr_zconn[id].socket = NULL;
 
   socket = zmq_socket(g_zmq_context, socket_type);
-
   if (!socket)
     {
     log_err(errno, __func__, "unable to create a socket");
@@ -259,7 +273,7 @@ int add_zconnection(
   bool connected)
 
   {
-  if (id >= ZMQ_CONNECTION_COUNT)
+  if (id < 0 || id >= ZMQ_CONNECTION_COUNT)
     {
     return -1;
     }
@@ -267,7 +281,7 @@ int add_zconnection(
   g_svr_zconn[id].socket = socket;
   g_svr_zconn[id].func   = func;
   g_svr_zconn[id].should_poll = should_poll;
-  g_svr_zconn[id].connected = false;
+  g_svr_zconn[id].connected = connected;
 
   return(PBSE_NONE);
   }  /* END add_zconnection() */
@@ -300,6 +314,12 @@ int process_status_request(
   )
 
   {
+  if (zsock == NULL || func == NULL)
+    {
+    log_err(-1, __func__, "wrong input: both socket and function must not be NULL");
+    return -1;
+    }
+
   // By 0MQ design the message would consist at least of 2 parts:
   // 1. sender ID
   // 2. first part of the message data
@@ -356,6 +376,7 @@ int process_status_request(
       char *data = (char *)zmq_msg_data(&part);
       if (!data)
         {
+        rc = -1;
         log_err(errno, __func__, "can't get message data");
         break;
         }
@@ -376,9 +397,11 @@ int process_status_request(
 
     // Deinit the message
     close_msg = false;
-    if (zmq_msg_close(&part) != 0)
+    rc = zmq_msg_close(&part);
+    if (rc != 0)
       {
       log_err(errno, __func__, "error close ZMQ message");
+      break;
       }
 
     // Update part number
@@ -394,9 +417,14 @@ int process_status_request(
   // Cleanup after break
   if (close_msg)
     {
-    if (zmq_msg_close(&part) != 0)
+    int tmp_rc = zmq_msg_close(&part);
+    if (tmp_rc != 0)
       {
       log_err(errno, __func__, "error close ZMQ message");
+      }
+    if (rc == 0)
+      {
+      rc = tmp_rc;
       }
     }
 

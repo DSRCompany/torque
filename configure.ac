@@ -424,6 +424,7 @@ m4_ifdef([AM_SILENT_RULES],[
     src/lib/Libnet/test/port_forwarding/Makefile
     src/lib/Libnet/test/rm/Makefile
     src/lib/Libnet/test/server_core/Makefile
+    src/lib/Libnet/test/zmq_common/Makefile
     src/lib/Libsite/test/Makefile
     src/lib/Libsite/test/site_allow_u/Makefile
     src/lib/Libsite/test/site_alt_rte/Makefile
