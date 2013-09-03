@@ -398,7 +398,6 @@ int pbs_read_json_status(const size_t sz, const char *data)
   long              mom_job_sync = 0;
   long              auto_np = 0;
   long              down_on_error = 0;
-  bool              send_hello = false;
   Json::Value       root;
   Json::Reader      reader;
   std::stringstream status_stream;
@@ -496,8 +495,15 @@ int pbs_read_json_status(const size_t sz, const char *data)
         }
 
       /* mom is requesting that we send the mom hierarchy file to her */
-      remove_hello(&hellos, current->nd_name);
-      send_hello = true;
+      remove_hello(&hellos, current->nd_name);      
+
+      /* send hierarchy to mom*/ 
+      {
+        struct hello_info *hi = (struct hello_info *)calloc(1, sizeof(struct hello_info));
+        
+        hi->name = strdup(current->nd_name);
+        enqueue_threadpool_request(send_hierarchy_threadtask, hi);        
+      }
 
       /* reset gpu data in case mom reconnects with changed gpus */
       clear_nvidia_gpus(current);
@@ -678,11 +684,6 @@ int pbs_read_json_status(const size_t sz, const char *data)
       }
 
     node_mutex.unlock();
-    }
-
-  if (send_hello)
-    {
-    return(SEND_HELLO);
     }
 
   return(DIS_SUCCESS);
