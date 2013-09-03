@@ -181,7 +181,7 @@ const char *MomStatusMessage::readStringMicStatus(const char *statusStrings, Jso
 
 
 
-void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *statusStrings)
+void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *statusStrings, bool request_hierarchy)
   {
   if (nodeId == NULL || strlen(nodeId) == 0 || statusStrings == NULL || strlen(statusStrings) == 0)
     {
@@ -191,6 +191,10 @@ void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *sta
   Json::Value myStatus(Json::objectValue);
 
   myStatus[JSON_NODE_ID_KEY] = nodeId;
+  if (request_hierarchy)
+    {
+      myStatus["first_update"] = true;
+    }
   for (const char *keyPtr = statusStrings; keyPtr && *keyPtr; keyPtr += strlen(keyPtr) + 1)
     {
     // Split each key-value pair by '=' character and set Json values.

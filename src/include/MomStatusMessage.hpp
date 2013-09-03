@@ -70,7 +70,7 @@ namespace TrqJson {
        * status_strings dynamic string.
        * @param status_strings dynamic string containing this MOM status.
        */
-      void readMergeStringStatus(const char *nodeId, const char *statusStrings);
+      void readMergeStringStatus(const char *nodeId, const char *statusStrings, bool request_hierarchy);
 
       /**
        * Clear the current message data.

@@ -84,9 +84,9 @@ namespace TrqZStatus
   * @param status_strings dynamic string containing this MOM status.
   * @return nothing
   */
-  void ZStatus::updateMyJsonStatus(const char *status_strings)
+  void ZStatus::updateMyJsonStatus(const char *status_strings, bool request_hierarchy)
   {
-    m_json_status.readMergeStringStatus(m_mom_alias, status_strings);
+    m_json_status.readMergeStringStatus(m_mom_alias, status_strings, request_hierarchy);
   }
 
 

@@ -23,7 +23,7 @@ namespace TrqZStatus
 
 
     int sendStatus();
-    void updateMyJsonStatus(const char *status_strings);
+    void updateMyJsonStatus(const char *status_strings, bool request_hierarchy);
 
     int readStatus(const size_t sz, const char *data);
 

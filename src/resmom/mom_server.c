@@ -1565,7 +1565,7 @@ void mom_server_all_update_stat(void)
       }
     else /* !g_use_zmq */
       {
-      g_zstatus->updateMyJsonStatus(mom_status->str);
+      g_zstatus->updateMyJsonStatus(mom_status->str, should_request_cluster_addrs());
       rc = g_zstatus->sendStatus();
       if (rc >= 0)
         {
