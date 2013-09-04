@@ -6627,6 +6627,11 @@ int main(
 
 #ifdef ZMQ
   if (g_use_zmq) {
+    if (g_zstatus)
+      {
+      delete g_zstatus;
+      g_zstatus = NULL;
+      }
     deinit_zmq();
   }
 #endif /* ZMQ */
