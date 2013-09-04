@@ -16,6 +16,8 @@
 #include "mutex_mgr.hpp"
 #include "threadpool.h"
 
+#include "MomStatusMessage.hpp"
+
 extern int              allow_any_mom;
 
 int gpu_entry_by_id(struct pbsnode *,const char *, int);
@@ -438,6 +440,14 @@ int pbs_read_json_status(const size_t sz, const char *data)
     return -1;
     }
 
+  Json::Value &senderID = root[JSON_SENDER_ID_KEY];
+  if (!senderID.isString())
+    {
+    return -1;
+    }
+  sprintf(log_buffer, "Got json statuses message from senderId:%s", senderID.asString().c_str());
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+
   get_svr_attr_l(SRV_ATR_MomJobSync, &mom_job_sync);
   get_svr_attr_l(SRV_ATR_AutoNodeNP, &auto_np);
   get_svr_attr_l(SRV_ATR_DownOnError, &down_on_error);
@@ -455,6 +465,9 @@ int pbs_read_json_status(const size_t sz, const char *data)
       log_err(-1, __func__, "received a status without node id specified. Ignored");
       continue;
       }
+
+    sprintf(log_buffer, "Got status nodeId:%s", nodeId.c_str());
+    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
 
     struct pbsnode *current = find_nodebyname(nodeId.c_str());
     if(current == NULL)

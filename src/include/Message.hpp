@@ -12,6 +12,7 @@
  * Json key for node ID
  */
 #define JSON_NODE_ID_KEY "node"
+#define JSON_SENDER_ID_KEY "senderId"
 
 namespace TrqJson {
 

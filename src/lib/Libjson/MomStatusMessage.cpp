@@ -42,6 +42,14 @@ int MomStatusMessage::readMergeJsonStatuses(const size_t size, const char *data)
     return -1;
     }
 
+  Json::Value &senderID = root[JSON_SENDER_ID_KEY];
+  if (!senderID.isString())
+    {
+    return -1;
+    }
+  sprintf(log_buffer, "Got json statuses message from senderId:%s", senderID.asString().c_str());
+  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+
   const Json::Value &body = root["body"];
 
   if (!body.isArray())
@@ -59,6 +67,8 @@ int MomStatusMessage::readMergeJsonStatuses(const size_t size, const char *data)
       updatesCount++;
       statusMap[nodeId] = body[i];
       }
+    sprintf(log_buffer, "Got status nodeId:%s", nodeId.c_str());
+    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
     }
 
   return(updatesCount);

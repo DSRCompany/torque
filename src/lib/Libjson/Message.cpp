@@ -48,7 +48,7 @@ void Message::generateHeader(Json::Value &root)
   root["messageType"] = getMessageType();
   root["ttl"] = 3000;
   root["sentDate"] = getIso8601Time();
-  root["senderId"] = momId;
+  root[JSON_SENDER_ID_KEY] = momId;
   }
 
 
