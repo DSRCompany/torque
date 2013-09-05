@@ -27,6 +27,43 @@ namespace TrqJson {
 
     friend class TestHelper;
 
+    public:
+
+      /**
+       * Set the ID of MOM owning the message. It's needed for "senderId" value.
+       */
+      void setMomId(std::string momId);
+
+      /**
+       * Dump all collected Json status messages into a character buffer.
+       * @return new string object that have to be deallocated with deleteString() function passed
+       *         as the 'hint' argument.
+       */
+      std::string *write();
+
+      /**
+       * Deallocate character buffer.
+       * The function is designed to be passed to zmq_msg_init_data().
+       * @param string_data isn't used.
+       * @param string accept heap std::string argument. Will fail with any other types.
+       */
+      static void deleteString(void *string_data, void *string);
+
+    protected:
+
+      /**
+       * The methond have to be implemented by specific implementations. The method should fill the
+       * given Json::Value object with corresponding message data.
+       * @param messageBody message body value.
+       */
+      virtual void generateBody(Json::Value &messageBody) = 0;
+
+      /**
+       * The method have to be implemented by specific implementations. The method should return 
+       * message type string like "status", "event" and so on.
+       */
+      virtual std::string getMessageType() = 0;
+
     private:
 
       /**
@@ -55,43 +92,6 @@ namespace TrqJson {
        * @return JsonCPP object that could be updated with other specific information.
        */
       void generateHeader(Json::Value &root);
-
-    protected:
-
-      /**
-       * The methond have to be implemented by specific implementations. The method should fill the
-       * given Json::Value object with corresponding message data.
-       * @param messageBody message body value.
-       */
-      virtual void generateBody(Json::Value &messageBody) = 0;
-
-      /**
-       * The method have to be implemented by specific implementations. The method should return 
-       * message type string like "status", "event" and so on.
-       */
-      virtual std::string getMessageType() = 0;
-
-    public:
-
-      /**
-       * Set the ID of MOM owning the message. It's needed for "senderId" value.
-       */
-      void setMomId(std::string momId);
-
-      /**
-       * Dump all collected Json status messages into a character buffer.
-       * @return new string object that have to be deallocated with deleteString() function passed
-       *         as the 'hint' argument.
-       */
-      std::string *write();
-
-      /**
-       * Deallocate character buffer.
-       * The function is designed to be passed to zmq_msg_init_data().
-       * @param data isn't used.
-       * @param hint accept heap std::string argument. Will fail with any other types.
-       */
-      static void deleteString(void *data, void *hint);
 
     }; /* class Message */
 

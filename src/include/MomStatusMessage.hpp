@@ -17,6 +17,42 @@ namespace TrqJson {
     /* Friend class for unit testing */
     friend class TestHelper;
 
+    public:
+
+      /**
+       * Parse and handle mom status message from the given buffer.
+       * @param sz data buffer size.
+       * @param data message data buffer.
+       * @return 0 if succeeded or -1 otherwise.
+       */
+      int readMergeJsonStatuses(const size_t size, const char *data);
+
+      /**
+       * Update this MOM status message in the global statuses map with the values from the given
+       * status_strings dynamic string.
+       * @param status_strings dynamic string containing this MOM status.
+       */
+      void readMergeStringStatus(const char *nodeId, const char *statusStrings);
+
+      /**
+       * Clear the current message data.
+       */
+      void clear();
+
+    protected:
+
+      /**
+       * Put all collected statuses to the given Json Value.
+       * @param messageBody the value to be updated
+       */
+      void generateBody(Json::Value &messageBody);
+
+      /**
+       * Return the message type. It's always "status" string.
+       * @return this message type.
+       */
+      std::string getMessageType();
+
     private:
 
       /**
@@ -40,42 +76,6 @@ namespace TrqJson {
        * @return the pointer to the last string in the MIC status that is </mic_status>
        */
       const char *readStringMicStatus(const char *statusStrings, Json::Value &status);
-
-    protected:
-
-      /**
-       * Put all collected statuses to the given Json Value.
-       * @param messageBody the value to be updated
-       */
-      void generateBody(Json::Value &messageBody);
-
-      /**
-       * Return the message type. It's always "status" string.
-       * @return this message type.
-       */
-      std::string getMessageType();
-
-    public:
-
-      /**
-       * Parse and handle mom status message from the given buffer.
-       * @param sz data buffer size.
-       * @param data message data buffer.
-       * @return 0 if succeeded or -1 otherwise.
-       */
-      int readMergeJsonStatuses(const size_t size, const char *data);
-
-      /**
-       * Update this MOM status message in the global statuses map with the values from the given
-       * status_strings dynamic string.
-       * @param status_strings dynamic string containing this MOM status.
-       */
-      void readMergeStringStatus(const char *nodeId, const char *statusStrings, bool request_hierarchy);
-
-      /**
-       * Clear the current message data.
-       */
-      void clear();
 
     }; /* class MomStatusMessage */
 

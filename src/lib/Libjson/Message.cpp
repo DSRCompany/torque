@@ -73,14 +73,14 @@ std::string *Message::write()
 
 
 
-void Message::deleteString(void *data, void *hint)
+void Message::deleteString(void *string_data, void *string)
   {
-  (void)data; /* avoid 'unused' compiler warning */
-  if (hint == NULL)
+  (void)string_data; /* avoid 'unused' compiler warning */
+  if (string == NULL)
     {
     return;
     }
-  delete((std::string *)hint);
+  delete((std::string *)string);
   }
 
 
