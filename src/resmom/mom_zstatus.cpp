@@ -25,13 +25,14 @@ namespace TrqZStatus
   * @param mom_alias MOM aliases
   * @return nothing
   */
-  ZStatus::ZStatus(mom_hierarchy_t *mh, char *mom_alias):
+  ZStatus::ZStatus(mom_hierarchy_t *mh, const char *mom_alias):
     m_mh(mh),
     m_mom_alias(mom_alias),
     m_cpath(0),
     m_clevel(0),
     m_zmq_server_socket(NULL)
   {
+    assert(m_mom_alias != NULL && *mom_alias != '\0');
     if (mh
         && mh->paths->num > 0)
     {
@@ -91,14 +92,15 @@ namespace TrqZStatus
 
 
   /**
-  * This function creates new ZeroMQ socket and connects it to the upper level nodes of the current path.
+  * This function creates new ZeroMQ socket and connects it to the upper level nodes of the current
+  * path.
   * If there are no mode levels on the current path it tries to choose the other path.
   * If there are no more paths available return with error
   * @return 0 if succeeded or -1 otherwise.
   */
   int ZStatus::connectNextLevel()
   {
-    int ret = -1;
+    int ret = ERR_NO_LEVEL;
 
     if (m_mh
         && m_clevel > 0)
@@ -117,6 +119,7 @@ namespace TrqZStatus
       resizable_array *levels = (resizable_array *)m_mh->paths->slots[m_cpath].item;
       m_clevel = levels->num;
       resizable_array *nodes  = (resizable_array *)levels->slots[m_clevel].item;
+      m_clevel--;
 
       /* connect nodes */
       ret = connectNodes(nodes);
@@ -126,7 +129,8 @@ namespace TrqZStatus
   }
 
   /**
-  * This function creates new ZeroMQ socket and connects it to the upper level nodes of the current path.
+  * This function creates new ZeroMQ socket and connects it to the upper level nodes of the current
+  * path.
   * If there are no mode levels on the current path it tries to choose the other path.
   * If there are no more paths available it connects directly to PBS servers.
   * @return 0 if succeeded or -1 otherwise.
@@ -149,10 +153,15 @@ namespace TrqZStatus
       m_zmq_socket.push_back(socket);
 
       /* connect socket to every node on a level */
+      ret = -1;
       for (int i = 1; i <= nodes->num; i++)
       {
         node_comm_t *nc = (node_comm_t *)nodes->slots[i].item;
-        ret = zconnect(socket, &nc->sock_addr, 0);
+        /* try to connect, don't fail if at least one was connected */
+        if (zconnect(socket, &nc->sock_addr, 0) == 0)
+          {
+          ret = 0;
+          }
       }
     }
 
@@ -173,10 +182,18 @@ namespace TrqZStatus
     while (ret < 0)
     {
       /* connect next level or servers */
-      if (connectNextLevel() != 0)
+      ret = connectNextLevel();
+      if (ret == ERR_NO_LEVEL)
       {
         /* no more nodes to connect, break */
+        ret = -1;
         break;
+      }
+
+      if (ret != 0)
+      {
+        /* connection error continue with next level */
+        continue;
       }
 
       /* trying to send to the last added level */
@@ -195,11 +212,24 @@ namespace TrqZStatus
           m_zmq_server_socket = zsocket();
           if (m_zmq_server_socket)
           {            
+            ret = -1;
             /* Connect directly to servers */
             for (int i = 0; i < mom_server_count; i++)
             {
               /* FIXME: use only default server ports now */
-              ret = zconnect(m_zmq_server_socket, &mom_servers[i].sock_addr, PBS_STATUS_SERVICE_PORT);
+              /* try to connect, don't fail if at least one was connected */
+              if (zconnect(m_zmq_server_socket, &mom_servers[i].sock_addr, PBS_STATUS_SERVICE_PORT)
+                  == 0)
+              {
+                ret = 0;
+              }
+            }
+
+            if (ret < 0)
+            {
+              /* Can not connect to any server close the socket */
+              close_zmq_socket(m_zmq_server_socket);
+              m_zmq_server_socket = NULL;
             }
           }
         }
@@ -218,11 +248,11 @@ namespace TrqZStatus
   * Send status messages connected hierarchy levels
   * @return 0 if succeeded or -1 otherwise.
   */
-  inline int ZStatus::sendToLevels()
+  int ZStatus::sendToLevels()
   {
     int ret = -1;
 
-    for (int i = 0; i<m_zmq_socket.size() && ret < 0; i++)
+    for (int i = 0; i < m_zmq_socket.size() && ret < 0; i++)
     {
       ret = zsend(m_zmq_socket[i]);
     }    
@@ -236,6 +266,7 @@ namespace TrqZStatus
   */
   int ZStatus::initMsgJsonStatus(zmq_msg_t *message)
   {
+    int ret = -1;
     const char *message_data;
     std::string *message_string;
 
@@ -243,8 +274,14 @@ namespace TrqZStatus
     message_string = m_json_status.write();
     message_data = message_string->c_str();
 
-    return zmq_msg_init_data(message, (void *)message_data, message_string->length(),
+    ret = zmq_msg_init_data(message, (void *)message_data, message_string->length(),
         m_json_status.deleteString, message_string);
+    if (ret)
+      {
+      /* clean up the data if error */
+      m_json_status.deleteString((void *)message_data, (void *)message_string);
+      }
+    return ret;
   }
 
   /**
@@ -288,13 +325,15 @@ namespace TrqZStatus
     char conn_url_buf[CONN_URL_LENGTH]; // Max length: "tcp://123.123.123.123:12345\0" = 28
     size_t printed_length;
 
-    printed_length = snprintf(conn_url_buf, CONN_URL_LENGTH, "tcp://%s:%u", inet_ntoa(sock_addr->sin_addr), port ? port : ntohs(sock_addr->sin_port));
+    printed_length = snprintf(conn_url_buf, CONN_URL_LENGTH, "tcp://%s:%u",
+        inet_ntoa(sock_addr->sin_addr), port ? port : ntohs(sock_addr->sin_port));
     assert(printed_length < CONN_URL_LENGTH);
       
     int ret = zmq_connect(socket, conn_url_buf);
     if (LOGLEVEL >= 10)
     {
-      sprintf(log_buffer, "zmq_connect: ret: %d, errno: %d, socket: %p, URL: %s", ret, errno, socket, conn_url_buf);
+      sprintf(log_buffer, "zmq_connect: ret: %d, errno: %d, socket: %p, URL: %s",
+          ret, errno, socket, conn_url_buf);
       log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
     }
     if (ret == -1)
@@ -329,7 +368,12 @@ namespace TrqZStatus
     }
 
     zmq_msg_t message;
-    initMsgJsonStatus(&message);
+    ret = initMsgJsonStatus(&message);
+    if (ret == -1)
+      {
+      log_err(errno, __func__, "can't initialize ZeroMQ message");
+      return -1;
+      }
 
     ret = zmq_msg_send(&message, socket, ZMQ_DONTWAIT);
     if (LOGLEVEL >= 10)

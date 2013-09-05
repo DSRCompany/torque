@@ -12,7 +12,7 @@ CLEANFILES += @PBS_MACH@/*.gcda @PBS_MACH@/*.gcno @PBS_MACH@/*.gcov
 
 include_HEADERS = catch_child.h checkpoint.h mom_comm.h mom_main.h mom_process_request.h \
 									mom_server_lib.h mom_job_func.h \
-									mom_zmq.h mom_zstatus.h
+									mom_zstatus.h
 
 AM_CFLAGS = `xml2-config --cflags`
 AM_LIBS   = `xml2-config --libs`
@@ -44,7 +44,7 @@ pbs_mom_SOURCES = catch_child.c mom_comm.c mom_inter.c mom_main.c	\
 		   ../server/job_attr_def.c ../server/job_recov.c	\
 		   ../server/reply_send.c ../server/resc_def_all.c	\
 		   ../server/job_qs_upgrade.c \
-			 mom_zmq.c mom_zstatus.cpp
+			 mom_zstatus.cpp
 if BUILDCPA
 pbs_mom_SOURCES += cray_cpa.c
 endif

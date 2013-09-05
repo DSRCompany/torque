@@ -17,8 +17,11 @@ namespace TrqZStatus
   */
   class ZStatus
   {
+  /* Friend class for unit testing */
+  friend class TestHelper;
+
   public:
-    ZStatus(mom_hierarchy_t *mh, char *mom_alias);
+    ZStatus(mom_hierarchy_t *mh, const char *mom_alias);
     ~ZStatus();
 
 
@@ -30,12 +33,19 @@ namespace TrqZStatus
     void clearStatusCache();
 
   private:
+    enum Errors
+    {
+      ERR_OK = 0,
+      ERR_FAIL = -1,
+      ERR_NO_LEVEL = -2
+    };
+
     TrqJson::MomStatusMessage m_json_status;
     std::vector<void *> m_zmq_socket;
     void *m_zmq_server_socket;
 
     mom_hierarchy_t *m_mh;
-    char *m_mom_alias;
+    const char *m_mom_alias;
 
     int m_cpath;
     int m_clevel;
@@ -44,7 +54,7 @@ namespace TrqZStatus
     int zconnect(void *socket, struct sockaddr_in *sock_addr, int port);
     int zsend(void *zsocket);
 
-    inline int sendToLevels();
+    int sendToLevels();
     int connectNextLevel();
     int connectNodes(resizable_array *nodes);
 
