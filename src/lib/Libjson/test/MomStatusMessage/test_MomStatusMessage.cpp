@@ -32,16 +32,16 @@ START_TEST(test_readMergeStringStatus)
   TestHelper testHelper(testMessage);
 
   // Test wrong input
-  testMessage.readMergeStringStatus(NULL, NULL);
-  testMessage.readMergeStringStatus("", NULL);
-  testMessage.readMergeStringStatus(TEST_MOM1_ID.c_str(), NULL);
-  testMessage.readMergeStringStatus(TEST_MOM1_ID.c_str(), "");
+  testMessage.readMergeStringStatus(NULL, NULL, true);
+  testMessage.readMergeStringStatus("", NULL, true);
+  testMessage.readMergeStringStatus(TEST_MOM1_ID.c_str(), NULL, true);
+  testMessage.readMergeStringStatus(TEST_MOM1_ID.c_str(), "", true);
   ck_assert_msg(testHelper.getStatusMap().empty(),
       "adding readMergeStringStatus with NULL/empty args touched the map");
 
   // Test simple status insertion
   testMessage.readMergeStringStatus(TEST_MOM1_ID.c_str(),
-      "father=Homer\0mother=Marge\0son=Bart\0daughter=Lisa\0");
+      "father=Homer\0mother=Marge\0son=Bart\0daughter=Lisa\0", true);
   statusMap = testHelper.getStatusMap();
   ck_assert_msg(!statusMap.empty(), "status map is empty");
   ck_assert_int_eq(statusMap.count(TEST_MOM1_ID), 1);
@@ -49,7 +49,7 @@ START_TEST(test_readMergeStringStatus)
 
   // Test simple status update
   testMessage.readMergeStringStatus(TEST_MOM1_ID.c_str(),
-      "father=Homer\0mother=Marge\0dog=Santa's Little Helper\0");
+      "father=Homer\0mother=Marge\0dog=Santa's Little Helper\0", true);
   statusMap = testHelper.getStatusMap();
   ck_assert_msg(!statusMap.empty(), "status map is empty");
   ck_assert_int_eq(statusMap.count(TEST_MOM1_ID), 1);
@@ -92,7 +92,7 @@ START_TEST(test_readMergeStringStatus)
       /* val 10 gpus */
       /* val 11 mics */
       /* val 12 node */
-      );
+      , false);
   statusMap = testHelper.getStatusMap();
   ck_assert_int_eq(statusMap.count(TEST_MOM2_ID), 1);
   Json::Value &nodeStatus = statusMap[TEST_MOM2_ID];
@@ -128,6 +128,7 @@ START_TEST(test_readMergeJsonStatuses)
   // Wrong type of message type field
   str = "{\"something\":\"something_more\","
     "\"messageType\":1234,"
+    "\"senderId\":\"sender_node\","
     "\"body\":[]}";
   rc = testMessage.readMergeJsonStatuses(strlen(str), str);
   ck_assert_int_eq(rc, -1);
@@ -135,6 +136,22 @@ START_TEST(test_readMergeJsonStatuses)
   // Message isn't "status"
   str = "{\"something\":\"something_more\","
     "\"messageType\":\"anotherType\","
+    "\"senderId\":\"sender_node\","
+    "\"body\":[]}";
+  rc = testMessage.readMergeJsonStatuses(strlen(str), str);
+  ck_assert_int_eq(rc, -1);
+
+  // Sender id is absend
+  str = "{\"something\":\"something_more\","
+    "\"messageType\":\"anotherType\","
+    "\"body\":[]}";
+  rc = testMessage.readMergeJsonStatuses(strlen(str), str);
+  ck_assert_int_eq(rc, -1);
+
+  // Sender id isn't string
+  str = "{\"something\":\"something_more\","
+    "\"messageType\":\"anotherType\","
+    "\"senderId\":1234,"
     "\"body\":[]}";
   rc = testMessage.readMergeJsonStatuses(strlen(str), str);
   ck_assert_int_eq(rc, -1);
@@ -142,6 +159,7 @@ START_TEST(test_readMergeJsonStatuses)
   // Body isn't array
   str = "{\"something\":\"something_more\","
     "\"messageType\":\"status\","
+    "\"senderId\":\"sender_node\","
     "\"body\":1234}";
   rc = testMessage.readMergeJsonStatuses(strlen(str), str);
   ck_assert_int_eq(rc, -1);
@@ -152,6 +170,7 @@ START_TEST(test_readMergeJsonStatuses)
   // Test empty body array
   str = "{\"something\":\"something_more\","
     "\"messageType\":\"status\","
+    "\"senderId\":\"sender_node\","
     "\"body\":[]}";
   rc = testMessage.readMergeJsonStatuses(strlen(str), str);
   ck_assert_int_eq(rc, 0);
@@ -162,6 +181,7 @@ START_TEST(test_readMergeJsonStatuses)
   // Test normal case (with wrong parts)
   str = "{\"something\":\"something_more\","
     "\"messageType\":\"status\","
+    "\"senderId\":\"sender_node\","
     "\"body\":["
     "{\"node\":\"node1@host\",\"key\":\"value\"},"
     "{                        \"key\":\"value\"}," /* node without id (skipped) */
@@ -184,6 +204,7 @@ START_TEST(test_body_and_type)
   // Test empty body array
   status_str = "{"
     "\"messageType\":\"status\","
+    "\"senderId\":\"sender_node\","
     "\"body\":["
     "{\"node\":\"node1@host\",\"key\":\"value\"},"
     "{\"node\":\"node2@host\",\"key\":\"value\"}"
@@ -201,9 +222,9 @@ START_TEST(test_body_and_type)
   bool parsed = reader.parse(*out, root);
   ck_assert_msg(parsed, "Failed parse written Message");
 
-  Json::Value senderId = root["messageType"];
-  ck_assert_msg(senderId.isString(), "messageType value isn't string");
-  ck_assert_str_eq(senderId.asCString(), "status");
+  Json::Value messageType = root["messageType"];
+  ck_assert_msg(messageType.isString(), "messageType value isn't string");
+  ck_assert_str_eq(messageType.asCString(), "status");
 
   Json::Value body = root["body"];
   ck_assert_msg(body.isArray(), "body isn't array value");

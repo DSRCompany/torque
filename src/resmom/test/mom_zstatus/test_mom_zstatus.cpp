@@ -928,7 +928,7 @@ START_TEST(zstatus_public_updateMyJsonStatus_test)
 
   /* Test */
   g_MomStatusMessage_readMergeStringStatus_count = 0;
-  zstatus.updateMyJsonStatus(NULL);
+  zstatus.updateMyJsonStatus(NULL, true);
   ck_assert_int_eq(g_MomStatusMessage_readMergeStringStatus_count, 1);
   }
 END_TEST

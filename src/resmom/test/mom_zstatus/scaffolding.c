@@ -179,7 +179,7 @@ int MomStatusMessage::readMergeJsonStatuses(const size_t size, const char *data)
   return g_MomStatusMessage_readMergeJsonStatuses_ret;
   }
 
-void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *statusStrings)
+void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *statusStrings, bool request_hierarchy)
   {
   g_MomStatusMessage_readMergeStringStatus_count++;
   }
