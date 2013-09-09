@@ -4,6 +4,8 @@
 
 #include <sstream>
 #include <jsoncpp/json/json.h>
+#include <stdio.h>
+#include <errno.h>
 
 #include "log.h"
 #include "dynamic_string.h"
@@ -37,18 +39,24 @@ void update_job_data(struct pbsnode *np, const char *jobstring_in);
  * @param gpus_status the Json value object reference containing GPU status.
  * @return DIS_SUCCESS (0) if succeeded or DIS_NOCOMMIT otherwise.
  */
-int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
+int pbs_read_json_gpu_status(struct pbsnode *np, const Json::Value &gpus_status)
   {
   pbs_attribute     temp;
-  std::string       tmp_value;
   std::stringstream gpuinfo_stream;
   unsigned int      startgpucnt;
+  bool              gpus_real;
   int               rc;
 
   if (LOGLEVEL >= 7)
     {
-    sprintf(log_buffer, "received gpu status from node %s", (np != NULL) ? np->nd_name : "NULL");
+    sprintf(log_buffer, "received gpu status from node %s", np->nd_name);
     log_record(PBSEVENT_SCHED, PBS_EVENTCLASS_REQUEST, __func__, log_buffer);
+    }
+
+  /* Check input */
+  if (gpus_status.isNull() || !gpus_status.isArray())
+    {
+    return(DIS_NOCOMMIT);
     }
 
   /* save current gpu count for node */
@@ -67,22 +75,19 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
     return(DIS_NOCOMMIT);
     }
 
-  if (gpus_status.isNull() || !gpus_status.isArray())
-    {
-    return(DIS_NOCOMMIT);
-    }
-
+  gpus_real = false;
   for (unsigned int i = 0; i < gpus_status.size(); i++)
     {
-    Json::Value gpu_status = gpus_status[i];
+    const Json::Value &gpu_status = gpus_status[i];
+    const Json::Value *temp_value;
     std::string gpuid;
     int gpuidx = -1;
 
     /* add the info to the "temp" attribute */
 
     /* get gpuid */
-    gpuid = gpu_status["gpuid"].asString();
-    if (gpuid.empty())
+    temp_value = &gpu_status["gpuid"];
+    if (temp_value->isNull() || !temp_value->isString())
       {
       if (LOGLEVEL >= 3)
         {
@@ -96,6 +101,7 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
       free_arst(&temp);
       return(DIS_NOCOMMIT);
       }
+    gpuid = temp_value->asString();
 
     /*
      * Get this gpus index, if it does not yet exist then find an empty entry.
@@ -136,25 +142,26 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
       }      
 
     /* get timestamp */
-    tmp_value = gpu_status["timestamp"].asString();
-    if (!tmp_value.empty())
+    temp_value = &gpu_status["timestamp"];
+    if (!temp_value->isNull() && temp_value->isString())
       {
-      gpuinfo_stream << ";timestamp=" << tmp_value;
+      gpuinfo_stream << ";timestamp=" << temp_value->asString();
       }
 
     /* get driver version, if there is one */
-    tmp_value = gpu_status["driver_ver"].asString();
-    if (!tmp_value.empty())
+    temp_value = &gpu_status["driver_ver"];
+    if (!temp_value->isNull() && temp_value->isString())
       {
-      gpuinfo_stream << ";driver_ver=" << tmp_value;
+      gpuinfo_stream << ";driver_ver=" << temp_value->asString();
 
-      np->nd_gpusn[gpuidx].driver_ver = atoi(tmp_value.c_str());
+      np->nd_gpusn[gpuidx].driver_ver = atoi(temp_value->asCString());
       }
 
-    tmp_value = gpu_status["gpu_mode"].asString();
-    if (!tmp_value.empty())
+    temp_value = &gpu_status["gpu_mode"];
+    if (!temp_value->isNull() && temp_value->isString())
       {
-      if (!tmp_value.compare("Normal") || !tmp_value.compare("Default"))
+      std::string mode = temp_value->asString();
+      if (!mode.compare("Normal") || !mode.compare("Default"))
         {
         np->nd_gpusn[gpuidx].mode = gpu_normal;
         if (gpu_has_job(np, gpuidx))
@@ -167,8 +174,8 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
           np->nd_gpusn[gpuidx].state = gpu_unallocated;
           }
         }
-      else if (!tmp_value.compare("Exclusive") ||
-              !tmp_value.compare("Exclusive_Thread"))
+      else if (!mode.compare("Exclusive") ||
+               !mode.compare("Exclusive_Thread"))
         {
         np->nd_gpusn[gpuidx].mode = gpu_exclusive_thread;
         if (gpu_has_job(np, gpuidx))
@@ -181,7 +188,7 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
           np->nd_gpusn[gpuidx].state = gpu_unallocated;
           }
         }
-      else if (!tmp_value.compare("Exclusive_Process"))
+      else if (!mode.compare("Exclusive_Process"))
         {
         np->nd_gpusn[gpuidx].mode = gpu_exclusive_process;
         if (gpu_has_job(np, gpuidx))
@@ -194,7 +201,7 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
           np->nd_gpusn[gpuidx].state = gpu_unallocated;
           }
         }
-      else if (!tmp_value.compare("Prohibited"))
+      else if (!mode.compare("Prohibited"))
         {
         np->nd_gpusn[gpuidx].mode = gpu_prohibited;
         np->nd_gpusn[gpuidx].state = gpu_unavailable;
@@ -248,11 +255,16 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
     gpuinfo_stream.clear();
     
     /* mark that this gpu node is not virtual */
-    np->nd_gpus_real = TRUE;
+    gpus_real = true;
     } /* END */
 
-  /* maintain the gpu count, if it has changed we need to update the nodes file */
+  if (gpus_real)
+    {
+    /* mark that this gpu node is not virtual */
+    np->nd_gpus_real = TRUE;
+    }
 
+  /* maintain the gpu count, if it has changed we need to update the nodes file */
   if (gpus_status.size() != startgpucnt)
     {
     np->nd_ngpus = gpus_status.size();
@@ -274,11 +286,10 @@ int pbs_read_json_gpu_status(struct pbsnode *np, Json::Value &gpus_status)
  * @param mics_status the Json value object reference containing MIC status.
  * @return DIS_SUCCESS (0) if succeeded or non-zero value otherwise.
  */
-int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
+int pbs_read_json_mic_status(struct pbsnode *np, const Json::Value &mics_status)
   {
   /* TODO: Implement. See process_mic_status() */
   pbs_attribute     temp;
-  std::string       tmp_value;
   std::stringstream micinfo_stream;
   int               mic_count = 0;
   int               rc = PBSE_NONE;
@@ -287,6 +298,11 @@ int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
     {
     sprintf(log_buffer, "received mic status from node %s", (np != NULL) ? np->nd_name : "NULL");
     log_record(PBSEVENT_SCHED, PBS_EVENTCLASS_REQUEST, __func__, log_buffer);
+    }
+
+  if (mics_status.isNull() || !mics_status.isArray())
+    {
+    return(DIS_NOCOMMIT);
     }
 
   /*
@@ -302,21 +318,17 @@ int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
     return(DIS_NOCOMMIT);
     }
 
-  if (mics_status.isNull() || !mics_status.isArray())
-    {
-    return(DIS_NOCOMMIT);
-    }
-
   for (unsigned int i = 0; i < mics_status.size(); i++)
     {
-    Json::Value mic_status = mics_status[i];
+    const Json::Value &mic_status = mics_status[i];
+    const Json::Value *temp_value;
     std::string micid;
 
     /* add the info to the "temp" attribute */
 
     /* get micid */
-    micid = mic_status["micid"].asString();
-    if (micid.empty())
+    temp_value = &mic_status["micid"];
+    if (temp_value->isNull() || !temp_value->isString())
       {
       if (LOGLEVEL >= 3)
         {
@@ -330,6 +342,7 @@ int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
       free_arst(&temp);
       return(DIS_NOCOMMIT);
       }
+    micid = temp_value->asString();
 
     micinfo_stream << "mic[" << mic_count << "]=" << micid;
 
@@ -337,11 +350,20 @@ int pbs_read_json_mic_status(struct pbsnode *np, Json::Value &mics_status)
     for (unsigned int i = 0; i < mic_status.getMemberNames().size(); i++)
       {
       std::string key = mic_status.getMemberNames()[i];
-      if (key.compare("micid"))
+      /* micid already handled, skip it */
+      if (!key.compare("micid"))
         {
         continue;
         }
-      micinfo_stream << ';' << key << '=' << mic_status[key].asString();
+      temp_value = &mic_status[key];
+      if (temp_value->isString() || temp_value->isBool())
+        {
+        micinfo_stream << ';' << key << '=' << temp_value->asString();
+        }
+      else if (temp_value->isInt())
+        {
+        micinfo_stream << ';' << key << '=' << temp_value->asInt();
+        }
       }
 
     rc = decode_arst(&temp, NULL, NULL, micinfo_stream.str().c_str(), 0);
@@ -403,11 +425,12 @@ int pbs_read_json_status(const size_t sz, const char *data)
   Json::Value       root;
   Json::Reader      reader;
   std::stringstream status_stream;
+  const Json::Value *temp_value;
 
   if (LOGLEVEL >= 10)
     {
-  log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-      "Reading of JSON status");
+    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
+        "Reading of JSON status");
     }
 
   if (sz <= 0 || !data)
@@ -424,23 +447,24 @@ int pbs_read_json_status(const size_t sz, const char *data)
     return -1;
     }
 
-  if (root["messageType"].asString() != "status")
+  temp_value = &root["messageType"];
+  if (temp_value->isNull() || !temp_value->isString() || temp_value->asString() != "status")
     {
     // There is no 'messageType' key in the message
     log_err(-1, __func__, "non-status message received");
     return -1;
     }
 
-  const Json::Value body = root["body"];
+  const Json::Value &body = root["body"];
 
-  if (!body.isArray())
+  if (body.isNull() || !body.isArray())
     {
     // Body have to be an array of nodes statuses
     log_err(-1, __func__, "status message containg no body");
     return -1;
     }
 
-  Json::Value &senderID = root[JSON_SENDER_ID_KEY];
+  const Json::Value &senderID = root[JSON_SENDER_ID_KEY];
   if (!senderID.isString())
     {
     return -1;
@@ -454,17 +478,18 @@ int pbs_read_json_status(const size_t sz, const char *data)
 
   for (unsigned int i = 0; i < body.size(); i++)
     {
-    Json::Value node_status = body[i];
+    const Json::Value &node_status = body[i];
     pbs_attribute temp;
-    Json::Value temp_value;
     bool dont_change_state = false;
 
-    std::string nodeId = node_status["node"].asString();
-    if (nodeId.empty())
+    
+    temp_value = &node_status["node"];
+    if (temp_value->isNull() || !temp_value->isString())
       {
       log_err(-1, __func__, "received a status without node id specified. Ignored");
       continue;
       }
+    std::string nodeId = temp_value->asString();
 
     sprintf(log_buffer, "Got status nodeId:%s", nodeId.c_str());
     log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
@@ -487,39 +512,32 @@ int pbs_read_json_status(const size_t sz, const char *data)
       log_event(PBSEVENT_ADMIN,PBS_EVENTCLASS_SERVER,__func__,log_buffer);
       }
 
-    temp_value = node_status[GPU_STATUS_KEY];
-    if (!temp_value.isNull())
-      {
-      pbs_read_json_gpu_status(current, temp_value);
-      }
+    pbs_read_json_gpu_status(current, node_status[GPU_STATUS_KEY]);
+    pbs_read_json_mic_status(current, node_status[MIC_STATUS_KEY]);
 
-    temp_value = node_status[MIC_STATUS_KEY];
-    if (!temp_value.isNull())
-      {
-      pbs_read_json_mic_status(current, temp_value);
-      }
-
-    if (node_status["first_update"].asBool())
+    temp_value = &node_status["first_update"];
+    if (!temp_value->isNull() && temp_value->isBool())
       {
       if (LOGLEVEL >= 10)
         {
         log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__,
-            ("status: first_update = "+node_status["first_update"].asString()).c_str());
+            ("status: first_update = " + temp_value->asString()).c_str());
         }
 
-      /* mom is requesting that we send the mom hierarchy file to her */
-      remove_hello(&hellos, current->nd_name);      
+      if (temp_value->asBool())
+        {
+        /* mom is requesting that we send the mom hierarchy file to her */
+        remove_hello(&hellos, current->nd_name);      
 
-      /* send hierarchy to mom*/ 
-      {
+        /* send hierarchy to mom*/ 
         struct hello_info *hi = (struct hello_info *)calloc(1, sizeof(struct hello_info));
-        
+
         hi->name = strdup(current->nd_name);
         enqueue_threadpool_request(send_hierarchy_threadtask, hi);        
-      }
 
-      /* reset gpu data in case mom reconnects with changed gpus */
-      clear_nvidia_gpus(current);
+        /* reset gpu data in case mom reconnects with changed gpus */
+        clear_nvidia_gpus(current);
+        }
       }
 
     if (current->nd_mom_reported_down)
@@ -527,50 +545,50 @@ int pbs_read_json_status(const size_t sz, const char *data)
       dont_change_state = true;
       }
 
-    temp_value = node_status["message"];
-    if (!temp_value.isNull())
+    temp_value = &node_status["message"];
+    if (!temp_value->isNull() && temp_value->isString())
       {
-      if (!temp_value.asString().compare("ERROR") && down_on_error)
+      if (!temp_value->asString().compare("ERROR") && down_on_error)
         {
         update_node_state(current, INUSE_DOWN);
         dont_change_state = true;
         }
-      status_stream << "message=" << temp_value.asString() << ";";
+      status_stream << "message=" << temp_value->asString() << ";";
       }
 
-    temp_value = node_status["state"].asString();
-    if (!temp_value.isNull())
+    temp_value = &node_status["state"];
+    if (!temp_value->isNull() && temp_value->isString())
       {
       if (!dont_change_state)
         {
-        process_state_str_val(current, temp_value.asCString());
+        process_state_str_val(current, temp_value->asCString());
         }
       }
 
-    temp_value = node_status["uname"];
-    if (!temp_value.isNull())
+    temp_value = &node_status["uname"];
+    if (!temp_value->isNull() && temp_value->isString())
       {
       if (allow_any_mom)
         {
-        process_uname_str(current, temp_value.asCString());
+        process_uname_str(current, temp_value->asCString());
         }
-      status_stream << "uname=" << temp_value.asString() << ";";
+      status_stream << "uname=" << temp_value->asString() << ";";
       }
 
-    temp_value = node_status["jobdata"];
-    if (!temp_value.isNull())
+    temp_value = &node_status["jobdata"];
+    if (!temp_value->isNull() && temp_value->isString())
       {
       if (mom_job_sync)
         {
-        update_job_data(current, temp_value.asCString());
+        update_job_data(current, temp_value->asCString());
         }
-      status_stream << "jobdata=" << temp_value.asString() << ";";
+      status_stream << "jobdata=" << temp_value->asString() << ";";
       }
 
-    temp_value = node_status["jobs"];
-    if (!temp_value.isNull())
+    temp_value = &node_status["jobs"];
+    if (!temp_value->isNull() && temp_value->isString())
       {
-      std::string value = temp_value.asString();
+      std::string value = temp_value->asString();
       if (mom_job_sync)
         {
         size_t len = value.length() + strlen(current->nd_name) + 2;
@@ -600,74 +618,86 @@ int pbs_read_json_status(const size_t sz, const char *data)
           enqueue_threadpool_request(sync_node_jobs, sji);
           }
         }
-      status_stream << "jobs=" << temp_value.asString() << ";";
+      status_stream << "jobs=" << temp_value->asString() << ";";
       }
 
-    temp_value = node_status["ncpus"];
-    if (!temp_value.isNull())
+    temp_value = &node_status["ncpus"];
+    if (!temp_value->isNull() && temp_value->isString())
       {
-      handle_auto_np_val(current, temp_value.asCString());
-      status_stream << "ncpus=" << temp_value.asString() << ";";
+      handle_auto_np_val(current, temp_value->asCString());
+      status_stream << "ncpus=" << temp_value->asString() << ";";
       }
 
-    if(!node_status["availmem"].isNull())
+    temp_value = &node_status["availmem"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "availmem=" << temp_value.asString() << ";";
+      status_stream << "availmem=" << temp_value->asString() << ";";
       }
 
-    if(!node_status["idletime"].isNull())
+    temp_value = &node_status["idletime"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "idletime=" << temp_value.asString() << ";";
+      status_stream << "idletime=" << temp_value->asString() << ";";
       }
 
-    if(!node_status["netload"].isNull())
+    temp_value = &node_status["netload"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "netload=" << temp_value.asString() << ";";
+      status_stream << "netload=" << temp_value->asString() << ";";
       }
     
-    if(!node_status["nsessions"].isNull())
+    temp_value = &node_status["nsessions"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "nsessions=" << temp_value.asString() << ";";
+      status_stream << "nsessions=" << temp_value->asString() << ";";
       }
 
-    if(!node_status["nusers"].isNull())
+    temp_value = &node_status["nusers"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "nusers=" << temp_value.asString() << ";";
+      status_stream << "nusers=" << temp_value->asString() << ";";
       }
 
-    if(!node_status["totmem"].isNull())
+    temp_value = &node_status["totmem"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "totmem=" << temp_value.asString() << ";";
+      status_stream << "totmem=" << temp_value->asString() << ";";
       }
 
-    if(!node_status["physmem"].isNull())
+    temp_value = &node_status["physmem"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "physmem=" << temp_value.asString() << ";";
+      status_stream << "physmem=" << temp_value->asString() << ";";
       }
 
-    if(!node_status["loadave"].isNull())
+    temp_value = &node_status["loadave"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "loadave=" << temp_value.asString() << ";";
+      status_stream << "loadave=" << temp_value->asString() << ";";
       }
     
-    if(!node_status["opsys"].isNull())
+    temp_value = &node_status["opsys"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "opsys=" << temp_value.asString() << ";";
+      status_stream << "opsys=" << temp_value->asString() << ";";
       }
 
-    if(!node_status["gres"].isNull())
+    temp_value = &node_status["gres"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "gres=" << temp_value.asString() << ";";
+      status_stream << "gres=" << temp_value->asString() << ";";
       }
 
-    if(!node_status["varattr"].isNull())
+    temp_value = &node_status["varattr"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "varattr=" << temp_value.asString() << ";";
+      status_stream << "varattr=" << temp_value->asString() << ";";
       }
 
-    if(node_status["sessions"].isArray())
+    temp_value = &node_status["sessions"];
+    if(!temp_value->isNull() && temp_value->isString())
       {
-      status_stream << "sessions=" << temp_value.asString() << ";";
+      status_stream << "sessions=" << temp_value->asString() << ";";
       }
 
     if (status_stream.rdbuf()->in_avail())

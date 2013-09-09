@@ -467,6 +467,7 @@ m4_ifdef([AM_SILENT_RULES],[
     src/resmom/test/mom_server/Makefile
     src/resmom/test/mom_process_request/Makefile
     src/resmom/test/mom_req_quejob/Makefile
+    src/resmom/test/mom_zstatus/Makefile
     src/resmom/test/pbs_demux/Makefile
     src/resmom/test/prolog/Makefile
     src/resmom/test/release_reservation/Makefile
@@ -551,6 +552,7 @@ m4_ifdef([AM_SILENT_RULES],[
     src/server/test/svr_task/Makefile
     src/server/test/track_alps_reservations/Makefile
     src/server/test/user_info/Makefile
+    src/server/test/zmq_process_mom_update/Makefile
     src/test/Makefile
     src/tools/test/Makefile
     src/tools/test/chk_tree/Makefile
