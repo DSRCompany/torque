@@ -1,7 +1,17 @@
-/* Include the file being tested to access static data structures */
-#include "../../net_server.c"
+#include "pbs_config.h"
+
+#include <stdio.h>
 
 #include "test_net_server.h"
+#include "net_connect.h"
+#include "lib_net.h"
+#include "zmq_common.h"
+#include "server_limits.h"
+
+extern fd_set   *GlobalSocketReadSet;
+extern u_long   *GlobalSocketAddrSet;
+extern u_long   *GlobalSocketPortSet;
+extern struct connection svr_conn[];
 
 #include "server_limits.h"
 #include "pbs_error.h"

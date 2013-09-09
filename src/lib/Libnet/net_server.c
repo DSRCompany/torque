@@ -128,6 +128,10 @@
 #include "dis.h"
 #include "zmq_common.h"
 
+#ifdef TEST_FUNCTION
+#define static
+#endif /* TEST_FUNCTION */
+
 char   local_host_name[PBS_MAXHOSTNAME + 1];
 size_t local_host_name_len = PBS_MAXHOSTNAME;
 

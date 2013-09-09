@@ -8,8 +8,7 @@ AM_LDFLAGS = @CHECK_LIBS@ ${lib_LTLIBRARIES}
 
 check_PROGRAMS = test_net_server
 
-# ${PROG_ROOT}/net_server.c is directly included to the test to access static variables
-libnet_server_la_SOURCES = scaffolding.c
+libnet_server_la_SOURCES = scaffolding.c ${PROG_ROOT}/net_server.c
 libnet_server_la_LDFLAGS = @CHECK_LIBS@ -shared -lgcov
 
 test_net_server_SOURCES = test_net_server.c

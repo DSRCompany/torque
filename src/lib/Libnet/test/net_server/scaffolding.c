@@ -27,10 +27,6 @@ struct zconnection_s g_svr_zconn[ZMQ_CONNECTION_COUNT] = {};
 void *g_zmq_context = NULL;
 char log_buffer[LOG_BUF_SIZE];
 
-fd_set *GlobalSocketReadSet;
-u_long *GlobalSocketAddrSet;
-u_long *GlobalSocketPortSet;
-
 void disiui_() {}
 
 char *get_cached_nameinfo(
