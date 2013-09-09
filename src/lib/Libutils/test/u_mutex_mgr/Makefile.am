@@ -1,6 +1,7 @@
 PROG_ROOT = ../..
 
 AM_CFLAGS = -g -DTEST_FUNCTION -I${PROG_ROOT}/ -I${PROG_ROOT}/${PBS_MACH} --coverage
+AM_CXXFLAGS = ${AM_CFLAGS}
 
 lib_LTLIBRARIES = libu_mutex_mgr.la
 

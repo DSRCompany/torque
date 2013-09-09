@@ -2,6 +2,7 @@
 PROG_ROOT = ../..
 
 AM_CFLAGS = -g -DTEST_FUNCTION -I${PROG_ROOT}/ -I${PROG_ROOT}/${PBS_MACH} -I$(PROG_ROOT)/../include --coverage `xml2-config --cflags`
+AM_CXXFLAGS = ${AM_CFLAGS}
 AM_LIBS=`xml2-config --libs`
 
 lib_LTLIBRARIES = libtest_execution_slot_tracker.la
