@@ -214,7 +214,6 @@
 #include <arpa/inet.h>
 #endif
 #ifdef ZMQ
-#include "mom_zmq.h"
 #include "mom_zstatus.h"
 #endif /* ZMQ */
 

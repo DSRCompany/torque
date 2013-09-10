@@ -47,7 +47,6 @@
 #include <dirent.h>
 #include <libxml/parser.h>
 #ifdef ZMQ
-#include "mom_zmq.h"
 #include "../lib/Libnet/zmq_common.h"
 #include "mom_zstatus.h"
 #endif /* ZMQ */
