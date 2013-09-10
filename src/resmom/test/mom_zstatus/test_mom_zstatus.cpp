@@ -562,14 +562,14 @@ START_TEST(zstatus_private_connectNodes_test)
   void *mock_socket = malloc(sizeof(int));
   std::vector<void *> *m_zmq_socket = test_helper.getZmqSocket();
 
-  mom_hierarchy_t *mh;
-  resizable_array *nodes;
+  mom_hierarchy_t *mh = NULL;
+  resizable_array *nodes = NULL;
   int rc;
 
   g_zmq_socket_ret = mock_socket;
   g_zmq_connect_ret = 0;
 
-  /* Check null inpu nodes array */
+  /* Check null input nodes array */
   rc = test_helper.connectNodes(nodes);
   ck_assert_int_eq(rc, -1);
   ck_assert(m_zmq_socket->empty());
