@@ -3,6 +3,7 @@
 
 #include <map>
 #include <zmq.h>
+#include <pthread.h>
 
 int                 g_get_max_num_descriptors_ret;
 int                 g_zmq_close_ret;
@@ -121,6 +122,13 @@ int zmq_setsockopt(void *s, int option, const void *optval, size_t optvallen)
 void *zmq_socket(void *context, int type)
   {
   return g_zmq_socket_ret;
+  }
+
+int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
+    void *(*start_routine) (void *), void *arg) throw()
+  {
+  // Do nothing
+  return 0;
   }
 
 extern "C" {

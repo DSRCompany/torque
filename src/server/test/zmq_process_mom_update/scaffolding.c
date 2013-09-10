@@ -1,6 +1,7 @@
 #include "pbs_config.h"
 #include "license_pbs.h" /* See here for the software license */
 
+#include <map>
 #include <pthread.h>
 
 #include "attribute.h"
@@ -16,6 +17,7 @@ char            log_buffer[LOG_BUF_SIZE];
 
 int g_decode_arst_ret;
 int g_decode_arst_ret_count;
+std::map<int, int> g_decode_arst_ret_map;
 int g_free_arst_ret_count;
 int g_node_gpustatus_list_ret;
 int g_node_gpustatus_list_ret_count;
@@ -42,6 +44,10 @@ long g_get_svr_attr_l_ret_auto_node_np;
 int decode_arst(pbs_attribute *patr, const char *name, const char *rescn, const char *val, int perm)
   {
   g_decode_arst_ret_count++;
+  if (g_decode_arst_ret_map.count(g_decode_arst_ret_count))
+    {
+    return g_decode_arst_ret_map[g_decode_arst_ret_count];
+    }
   return g_decode_arst_ret;
   }
 

@@ -839,6 +839,13 @@ START_TEST(process_status_request_test_triple_part)
   }
 END_TEST
 
+START_TEST(start_socket_thread_test)
+  {
+  /* Make GCov happy */
+  start_socket_thread(0, NULL);
+  }
+END_TEST
+
 Suite *zmq_common_suite(void)
   {
   Suite *s = suite_create("zmq_common_suite methods");
@@ -906,6 +913,10 @@ Suite *zmq_common_suite(void)
   tcase_add_test(tc_core, process_status_request_test_single_part);
   tcase_add_test(tc_core, process_status_request_test_double_part);
   tcase_add_test(tc_core, process_status_request_test_triple_part);
+  suite_add_tcase(s, tc_core);
+
+  tc_core = tcase_create("start_socket_thread_test");
+  tcase_add_test(tc_core, start_socket_thread_test);
   suite_add_tcase(s, tc_core);
 
   return s;

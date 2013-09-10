@@ -13,6 +13,7 @@ int pbs_read_json_mic_status(struct pbsnode *np, const Json::Value &gpus_status)
 extern int  allow_any_mom;
 extern int  g_decode_arst_ret;
 extern int  g_decode_arst_ret_count;
+extern std::map<int, int> g_decode_arst_ret_map;
 extern int  g_free_arst_ret_count;
 extern int  g_node_gpustatus_list_ret;
 extern int  g_node_gpustatus_list_ret_count;
@@ -81,6 +82,7 @@ void pbs_read_json_gpu_status_tc_setup(void)
 
   g_decode_arst_ret = 0;
   g_decode_arst_ret_count = 0;
+  g_decode_arst_ret_map.clear();
   g_free_arst_ret_count = 0;
   g_node_gpustatus_list_ret = 0;
   g_node_gpustatus_list_ret_count = 0;
@@ -91,6 +93,7 @@ void pbs_read_json_gpu_status_tc_setup(void)
 void pbs_read_json_gpu_status_tc_teardown(void)
   {
   deinit_node(gs_mock_node);
+  g_decode_arst_ret_map.clear();
   }
 
 START_TEST(pbs_read_json_gpu_status_test_null_value)
@@ -128,6 +131,36 @@ START_TEST(pbs_read_json_gpu_status_test_attribute_init_fail)
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 1);
   ck_assert_int_eq(g_free_arst_ret_count, 0);
+  }
+END_TEST
+
+START_TEST(pbs_read_json_gpu_status_test_attribute_decode_fail)
+  {
+  int rc;
+
+  Json::Value status(Json::arrayValue);
+  Json::Value gpu1;
+  Json::Value gpu2;
+
+  gpu1["gpuid"] = "gpu1";
+  gpu1["timestamp"] = "1234567890";
+  gpu1["driver_ver"] = "1234.00033";
+  gpu1["gpu_mode"] = "Normal";
+  gpu2["gpuid"] = "gpu2";
+  gpu2["timestamp"] = "1234567890";
+  gpu2["driver_ver"] = "1234.00033";
+  gpu2["gpu_mode"] = "Exclusive";
+
+  status.append(gpu1);
+  status.append(gpu2);
+
+  g_decode_arst_ret_map[2] = -1;
+  rc = pbs_read_json_gpu_status(gs_mock_node, status);
+  ck_assert_int_eq(rc, DIS_NOCOMMIT);
+  ck_assert_int_eq(g_decode_arst_ret_count, 2); // init only
+  ck_assert_int_eq(g_free_arst_ret_count, 1);
+  ck_assert_int_eq(g_update_nodes_file_ret_count, 0);
+  ck_assert_int_eq(g_node_gpustatus_list_ret_count, 0); // node was updated
   }
 END_TEST
 
@@ -321,6 +354,7 @@ void pbs_read_json_mic_status_tc_setup(void)
 
   g_decode_arst_ret = 0;
   g_decode_arst_ret_count = 0;
+  g_decode_arst_ret_map.clear();
   g_free_arst_ret_count = 0;
   g_node_micstatus_list_ret = 0;
   g_node_micstatus_list_ret_count = 0;
@@ -329,6 +363,7 @@ void pbs_read_json_mic_status_tc_setup(void)
 void pbs_read_json_mic_status_tc_teardown(void)
   {
   deinit_node(gs_mock_node);
+  g_decode_arst_ret_map.clear();
   }
 
 START_TEST(pbs_read_json_mic_status_test_null_value)
@@ -366,6 +401,33 @@ START_TEST(pbs_read_json_mic_status_test_attribute_init_fail)
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 1);
   ck_assert_int_eq(g_free_arst_ret_count, 0);
+  }
+END_TEST
+
+START_TEST(pbs_read_json_mic_status_test_attribute_decode_fail)
+  {
+  int rc;
+
+  Json::Value status(Json::arrayValue);
+  Json::Value mic1;
+  Json::Value mic2;
+
+  mic1["micid"] = "mic1";
+  mic1["key1"] = "1234567890";
+  mic1["key2"] = "1234.00033";
+  mic2["micid"] = "mic2";
+  mic2["key1"] = "1234567890";
+  mic2["key2"] = "1234.00033";
+
+  status.append(mic1);
+  status.append(mic2);
+
+  g_decode_arst_ret_map[2] = -1;
+  rc = pbs_read_json_mic_status(gs_mock_node, status);
+  ck_assert_int_eq(rc, -1);
+  ck_assert_int_eq(g_decode_arst_ret_count, 2);
+  ck_assert_int_eq(g_free_arst_ret_count, 1);
+  ck_assert_int_eq(g_node_micstatus_list_ret_count, 1); // node was updated
   }
 END_TEST
 
@@ -506,6 +568,7 @@ void pbs_read_json_status_tc_setup(void)
   g_clear_nvidia_gpus_ret_count = 0;
   g_decode_arst_ret = 0;
   g_decode_arst_ret_count = 0;
+  g_decode_arst_ret_map.clear();
   g_enqueue_threadpool_request_ret_count = 0;
   g_free_arst_ret_count = 0;
   g_find_nodebyname_ret = gs_mock_node;
@@ -522,6 +585,7 @@ void pbs_read_json_status_tc_setup(void)
 void pbs_read_json_status_tc_teardown(void)
   {
   deinit_node(gs_mock_node);
+  g_decode_arst_ret_map.clear();
   }
 
 START_TEST(pbs_read_json_status_test_null_value)
@@ -890,6 +954,70 @@ START_TEST(pbs_read_json_status_test_ncpus)
   }
 END_TEST
 
+START_TEST(pbs_read_json_status_test_attribute_init_fail)
+  {
+  int rc;
+  Json::Value root;
+  Json::FastWriter writer;
+  std::string result;
+  root["messageType"] = "status";
+  root["senderId"] = "node1";
+  root["body"][0]["node"] = "node1";
+  
+  root["body"][0]["availmem"] = "asdf";
+  root["body"][0]["idletime"] = "asdf";
+  root["body"][0]["netload"] = "asdf";
+  root["body"][0]["nsessions"] = "asdf";
+  root["body"][0]["nusers"] = "asdf";
+  root["body"][0]["totmem"] = "asdf";
+  root["body"][0]["physmem"] = "asdf";
+  root["body"][0]["loadave"] = "asdf";
+  root["body"][0]["opsys"] = "asdf";
+  root["body"][0]["gres"] = "asdf";
+  root["body"][0]["varattr"] = "asdf";
+  root["body"][0]["sessions"] = "asdf";
+
+  result = writer.write(root);
+
+  g_decode_arst_ret = -1;
+  rc = pbs_read_json_status(result.length(), result.c_str());
+  ck_assert_int_eq(rc, 0);
+  ck_assert_int_eq(g_decode_arst_ret_count, 1);
+  }
+END_TEST
+
+START_TEST(pbs_read_json_status_test_attribute_decode_fail)
+  {
+  int rc;
+  Json::Value root;
+  Json::FastWriter writer;
+  std::string result;
+  root["messageType"] = "status";
+  root["senderId"] = "node1";
+  root["body"][0]["node"] = "node1";
+  
+  root["body"][0]["availmem"] = "asdf";
+  root["body"][0]["idletime"] = "asdf";
+  root["body"][0]["netload"] = "asdf";
+  root["body"][0]["nsessions"] = "asdf";
+  root["body"][0]["nusers"] = "asdf";
+  root["body"][0]["totmem"] = "asdf";
+  root["body"][0]["physmem"] = "asdf";
+  root["body"][0]["loadave"] = "asdf";
+  root["body"][0]["opsys"] = "asdf";
+  root["body"][0]["gres"] = "asdf";
+  root["body"][0]["varattr"] = "asdf";
+  root["body"][0]["sessions"] = "asdf";
+
+  result = writer.write(root);
+
+  g_decode_arst_ret_map[2] = -1;
+  rc = pbs_read_json_status(result.length(), result.c_str());
+  ck_assert_int_eq(rc, 0);
+  ck_assert_int_eq(g_decode_arst_ret_count, 2);
+  }
+END_TEST
+
 START_TEST(pbs_read_json_status_test_other_values)
   {
   int rc;
@@ -932,6 +1060,7 @@ Suite *zmq_process_mom_update_suite(void)
   tcase_add_test(tc_core, pbs_read_json_gpu_status_test_null_value);
   tcase_add_test(tc_core, pbs_read_json_gpu_status_test_non_array_value);
   tcase_add_test(tc_core, pbs_read_json_gpu_status_test_attribute_init_fail);
+  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_attribute_decode_fail);
   tcase_add_test(tc_core, pbs_read_json_gpu_status_test_empty_array);
   tcase_add_test(tc_core, pbs_read_json_gpu_status_test_no_gpuid);
   tcase_add_test(tc_core, pbs_read_json_gpu_status_test_no_gpuidx_found);
@@ -945,6 +1074,7 @@ Suite *zmq_process_mom_update_suite(void)
   tcase_add_test(tc_core, pbs_read_json_mic_status_test_null_value);
   tcase_add_test(tc_core, pbs_read_json_mic_status_test_non_array_value);
   tcase_add_test(tc_core, pbs_read_json_mic_status_test_attribute_init_fail);
+  tcase_add_test(tc_core, pbs_read_json_mic_status_test_attribute_decode_fail);
   tcase_add_test(tc_core, pbs_read_json_mic_status_test_empty_array);
   tcase_add_test(tc_core, pbs_read_json_mic_status_test_no_micid);
   tcase_add_test(tc_core, pbs_read_json_mic_status_test_correct_statuses);
@@ -967,6 +1097,8 @@ Suite *zmq_process_mom_update_suite(void)
   tcase_add_test(tc_core, pbs_read_json_status_test_jobdata);
   tcase_add_test(tc_core, pbs_read_json_status_test_jobs);
   tcase_add_test(tc_core, pbs_read_json_status_test_ncpus);
+  tcase_add_test(tc_core, pbs_read_json_status_test_attribute_init_fail);
+  tcase_add_test(tc_core, pbs_read_json_status_test_attribute_decode_fail);
   tcase_add_test(tc_core, pbs_read_json_status_test_other_values);
   suite_add_tcase(s, tc_core);
   return s;

@@ -63,6 +63,7 @@ START_TEST(test_readMergeStringStatus)
       /* val 03     */ "sessions=335 541 922\0"
       /* val 04     */ "nsessions=19\0"
       /* gpu        */ "<gpu_status>\0"
+      /* ignored    */ "WRONG NON KEY VALUE\0"
       /* /gpu       */ "</gpu_status>\0"
       /* gpu        */ "<gpu_status>\0"
       /* gpu1 01    */ "gpu_mode=Default\0"
@@ -86,6 +87,7 @@ START_TEST(test_readMergeStringStatus)
       /* mic1 01    */ "mic_id=mic1\0"
       /* mic1 02    */ "key=value\0"
       /* mic2 01    */ "mic_id=mic2\0"
+      /* ignored    */ "WRONG NON KEY VALUE\0"
       /* /mic       */ "</mic_status>\0"
       /* val 08     */ "availmem=7265052kb\0"
       /* val 09     */ "physmem=8180124kb\0"
@@ -232,6 +234,13 @@ START_TEST(test_body_and_type)
   }
 END_TEST
 
+START_TEST(test_clear)
+  {
+  MomStatusMessage testMessage;
+  testMessage.clear();
+  }
+END_TEST
+
 Suite *MomStatusMessage_suite(void)
   {
   Suite *s = suite_create("MomStatusMessage_suite methods");
@@ -245,6 +254,10 @@ Suite *MomStatusMessage_suite(void)
 
   tc_core = tcase_create("test_body_and_type");
   tcase_add_test(tc_core, test_body_and_type);
+  suite_add_tcase(s, tc_core);
+
+  tc_core = tcase_create("test_clear");
+  tcase_add_test(tc_core, test_clear);
   suite_add_tcase(s, tc_core);
 
   return s;
