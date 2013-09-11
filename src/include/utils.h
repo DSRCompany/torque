@@ -154,10 +154,11 @@ extern void tfree (tree **);
 extern int is_whitespace (char);
 extern int write_buffer (char *,int,int);
 
-/* misc functions */
+/* misc functions in u_misc.c */
 extern void save_args(int, char **);
 extern char *find_command(char *, char *);
-
+void shuffle_indices(int *array, int size);
+  
 /* utility functions in u_mu.c */
 int           MUSNPrintF (char **, int *, const char *, ...);
 int           MUStrNCat (char **, int *, const char *);

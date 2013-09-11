@@ -12,6 +12,7 @@
 #include "mom_server.h"
 #include "../lib/Libnet/zmq_common.h"
 #include "mom_config.h"
+#include "utils.h"
 
 extern void       *g_zmq_context;
 extern mom_server mom_servers[PBS_MAXSERVER];
@@ -152,11 +153,15 @@ namespace TrqZStatus
       /* add socket to our connected levels */
       m_zmq_socket.push_back(socket);
 
+      /* shuffle array indices */
+      int *idx = malloc(nodes->num * sizeof(int)); // we don't need 0-ed array here
+      shuffle_indices(idx, nodes->num);
+  
       /* connect socket to every node on a level */
       ret = -1;
       for (int i = 1; i <= nodes->num; i++)
       {
-        node_comm_t *nc = (node_comm_t *)nodes->slots[i].item;
+        node_comm_t *nc = (node_comm_t *)nodes->slots[idx[i]].item;
         /* try to connect, don't fail if at least one was connected */
         if (zconnect(socket, &nc->sock_addr, 0) == 0)
           {

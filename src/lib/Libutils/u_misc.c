@@ -83,6 +83,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 #ifndef MAX_CMD_ARGS
 #define MAX_CMD_ARGS 10
@@ -203,4 +204,44 @@ void save_args(int argc, char **argv)
   ArgV[0] = find_command(ArgV[0], OriginalPath);
   if (!ArgV[0])
     ArgV[0] = OriginalCommand;
+  }
+
+/**
+ * The function fills the given array with integers from 0 to size-1 in random order.
+ * It's useful for organize random order array access.
+ * @param array allocated array of integer
+ * @param the array size
+ */
+void shuffle_indices(int *array, int size)
+  {
+  assert(size >= 0);
+  assert(array != NULL);
+
+  /* Fill the array with zeros */
+  memset(array, 0, size * sizeof(int));
+
+  /* For each integer from size-1 to 1 write it to a random array cell.
+   * If the cell already contain non-0 value lookup for nearest 0 value cell forward or backward.
+   */
+  for (int i = size - 1; i > 0; i--)
+    {
+    /* Choose random index between 0 and size-1 inclusive */
+    int pos = rand() % size;
+    if (array[pos] != 0)
+      {
+      /* Choose direction */
+      int direction = (rand() % 2) * 2 - 1; // -1 or 1
+      while (array[pos] != 0)
+        {
+        pos = pos + direction;
+        /* Check overflow/underflow */
+        if (pos < 0 || pos >= size)
+          {
+          pos = (pos + size) % size; // 
+          }
+        }
+      }
+    /* Write the current value to the chosen position */
+    array[pos] = i;
+    }
   }
