@@ -131,6 +131,10 @@ AC_ARG_WITH(zeromq,
    [AS_HELP_STRING([--with-zeromq], [Enable and optionally specify the path to zeromq socket library operating much faster than TCP sockets (default=yes)])], [have_zeromq=${with_zeromq}], [have_zeromq=yes])
 AC_SUBST(have_zeromq)
 
+AC_ARG_WITH(jsoncpp,
+   [AS_HELP_STRING([--with-jsoncpp], [Enable and optionally specify the path to jsoncpp library. It is needed and enabled by default if zeromq enabled. Take no effect if zeromq disabled (default=yes)])], [have_jsoncpp=${with_jsoncpp}], [have_jsoncpp=yes])
+AC_SUBST(have_jsoncpp)
+
 if test "${have_zeromq}" != "no" ; then
   if test "${have_zeromq}" == "yes"; then
     # ZeroMQ is enabled
@@ -140,31 +144,69 @@ if test "${have_zeromq}" != "no" ; then
 
 $ZMQ_PKG_ERRORS
 
-To solve this error ensure that libzmq.pc file is installed to pkgconfig
-directory or disable zeromq to switch the build to TCP sockets by configuring
-with --without-zeromq.
+To solve this error use one of the following solution:
+- ensure that libzmq.pc file is installed to pkgconfig directory
+- specify exact path containing the libzmq.so file
+- disable zeromq to switch the build to TCP sockets by configuring with --without-zeromq.
     ])])
   else
-    # ZeroMQ is enabled with non-standard path
-    AC_CHECK_LIB(zmq, main, [ TRANSPORTLIBS="$TRANSPORTLIBS -L${have_zeromq} -lzmq" ],
-      [ AC_MSG_ERROR([ZeroMQ is enabled but can not be found at the specified path.
+    zmq_path="${have_zeromq}"
+    AC_CHECK_FILE(["${zmq_path}"], [static=yes], [static=no])
+    if test "${static}" == "yes"; then
+      # ZeroMQ is enabled statically with non-standard path
+      AC_CHECK_LIB(c, main, [ TRANSPORTLIBS="$TRANSPORTLIBS ${zmq_path}" ],
+        [ AC_MSG_ERROR([ZeroMQ is enabled to be linked statically but the specified library file isn''t correct.
        
-${have_zeromq}
+${zmq_path}
+
+To solve this error ensure that --with-zeromq argument is pointing to the libzmq.a library file.
+      ])], "${zmq_path}")
+    else
+      # ZeroMQ is enabled dynamically with non-standard path
+      AC_CHECK_LIB(zmq, main, [ TRANSPORTLIBS="$TRANSPORTLIBS -L${zmq_path} -lzmq" ],
+        [ AC_MSG_ERROR([ZeroMQ is enabled but can not be found at the specified path.
+       
+${zmq_path}
 
 To solve this error ensure that libzmq.so file is installed under the path passed to --with-zeromq argument.
 If the library is installed at standard path use --with-zeromq without arguments or swithc to the build with
 TCP sockets by configuring with --without-zeromq.
-      ])], "-L${have_zeromq}")
+      ])], "-L${zmq_path}")
+    fi
+  fi
+
+  if test "${have_jsoncpp}" == "yes" || "${have_jsoncpp}" == "no" ; then
+    AC_CHECK_LIB(jsoncpp, main,
+      [ TRANSPORTLIBS="$TRANSPORTLIBS -ljsoncpp" ],
+      [ AC_MSG_ERROR([TORQUE needs jsoncpp library if zeromq is enabled. Please either install jsoncpp, specify exact path to jsoncpp library as --with-jsoncpp argument or configure with --without-zeromq]) ])
+  else
+    jsoncpp_path="${have_jsoncpp}"
+    AC_CHECK_FILE(["${jsoncpp_path}"], [static=yes], [static=no])
+    if test "${static}" == "yes"; then
+      # jsoncpp is enabled statically with non-standard path
+      AC_CHECK_LIB(c, main, [ TRANSPORTLIBS="$TRANSPORTLIBS ${jsoncpp_path}" ],
+        [ AC_MSG_ERROR([JsonCPP is enabled to be linked statically but the specified library file isn''t correct.
+       
+${jsoncpp_path}
+
+To solve this error ensure that --with-jsoncpp argument is pointing to the libjsoncpp.a library file.
+      ])], "${jsoncpp_path}")
+    else
+      # ZeroMQ is enabled dynamically with non-standard path
+      AC_CHECK_LIB(jsoncpp, main, [ TRANSPORTLIBS="$TRANSPORTLIBS -L${jsoncpp_path} -ljsoncpp" ],
+        [ AC_MSG_ERROR([JsonCPP is enabled but can not be found at the specified path.
+       
+${jsoncpp_path}
+
+To solve this error ensure that libjsoncpp.so file is installed under the path passed to --with-jsoncpp argument.
+If the library is installed at standard path use --with-jsoncpp without arguments or switch to the build with
+TCP sockets by configuring with --without-zeromq.
+      ])], "-L${jsoncpp_path}")
+    fi
   fi
 
   AC_DEFINE(ZMQ, 1, [use ZMQ as a transport layer])
 
-  dnl FIXME: We need for more strict check to determine the version.
-  dnl        The problem is that jsoncpp doesn't provide .pc pkgconfig file. Also it has no API call version.
-  dnl        Probably there is some fix. This check would be updated after more close investigation during moving to json.
-  AC_CHECK_LIB(jsoncpp, main,
-    [ TRANSPORTLIBS="$TRANSPORTLIBS -ljsoncpp" ],
-    [ AC_MSG_ERROR([TORQUE needs jsoncpp library if zeromq is enabled. Please install jsoncpp or configure with --without-zeromq]) ])
 fi
 
 AM_CONDITIONAL(ZMQ, test x"$have_zeromq" != "xno")
