@@ -159,9 +159,9 @@ namespace TrqZStatus
   
       /* connect socket to every node on a level */
       ret = -1;
-      for (int i = 1; i <= nodes->num; i++)
+      for (int i = 0; i < nodes->num; i++)
       {
-        node_comm_t *nc = (node_comm_t *)nodes->slots[idx[i]].item;
+        node_comm_t *nc = (node_comm_t *)nodes->slots[idx[i]+1].item;
         /* try to connect, don't fail if at least one was connected */
         if (zconnect(socket, &nc->sock_addr, 0) == 0)
           {
