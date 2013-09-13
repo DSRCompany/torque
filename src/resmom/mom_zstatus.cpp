@@ -154,7 +154,7 @@ namespace TrqZStatus
       m_zmq_socket.push_back(socket);
 
       /* shuffle array indices */
-      int *idx = malloc(nodes->num * sizeof(int)); // we don't need 0-ed array here
+      int *idx = (int *)malloc(nodes->num * sizeof(int)); // we don't need 0-ed array here
       shuffle_indices(idx, nodes->num);
   
       /* connect socket to every node on a level */
