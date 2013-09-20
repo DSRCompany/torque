@@ -5,6 +5,7 @@
 
 #ifdef ZMQ
 
+#include <boost/ptr_container/ptr_vector.hpp>
 #include "Message.hpp"
 
 namespace TrqJson {
@@ -32,7 +33,7 @@ namespace TrqJson {
        * status_strings dynamic string.
        * @param status_strings dynamic string containing this MOM status.
        */
-      void readMergeStringStatus(const char *nodeId, const char *statusStrings);
+      void readMergeStringStatus(const char *nodeId, boost::ptr_vector<std::string> mom_status, bool request_hierarchy);
 
       /**
        * Clear the current message data.
@@ -67,7 +68,7 @@ namespace TrqJson {
        * @param status value where GPU status should be added.
        * @return the pointer to the last string in the GPU status that is </gpu_status>
        */
-      const char *readStringGpuStatus(const char *statusStrings, Json::Value &status);
+      boost::ptr_vector<std::string>::iterator readStringGpuStatus(boost::ptr_vector<std::string>::iterator, boost::ptr_vector<std::string> mom_status, Json::Value &status);
 
       /**
        * Helper function that handles MIC status part of the status message.
@@ -75,7 +76,7 @@ namespace TrqJson {
        * @param status value where MIC status should be added.
        * @return the pointer to the last string in the MIC status that is </mic_status>
        */
-      const char *readStringMicStatus(const char *statusStrings, Json::Value &status);
+      boost::ptr_vector<std::string>::iterator readStringMicStatus(boost::ptr_vector<std::string>::iterator, boost::ptr_vector<std::string> mom_status, Json::Value &status);
 
     }; /* class MomStatusMessage */
 

@@ -1,20 +1,3 @@
-<<<<<<< HEAD
-#include <stdio.h>
-#include <stdlib.h>
-#include <check.h>
-
-
-START_TEST(test_one)
-  {
-  }
-END_TEST
-
-
-
-
-START_TEST(test_two)
-  {
-=======
 #include "utils.h"
 
 #include "test_u_misc.h"
@@ -56,27 +39,10 @@ START_TEST(shuffle_indices_test)
 
   /* free resources */
   free(arr);
->>>>>>> Connect to nodes in random order.
   }
 END_TEST
 
 
-<<<<<<< HEAD
-
-
-Suite *u_misc_suite(void)
-  {
-  Suite *s = suite_create("u_misc test suite methods");
-  TCase *tc_core = tcase_create("test_one");
-  tcase_add_test(tc_core, test_one);
-  suite_add_tcase(s, tc_core);
-  
-  tc_core = tcase_create("test_two");
-  tcase_add_test(tc_core, test_two);
-  suite_add_tcase(s, tc_core);
-  
-  return(s);
-=======
 Suite *u_misc_suite(void)
   {
   Suite *s = suite_create("u_misc methods");
@@ -87,7 +53,6 @@ Suite *u_misc_suite(void)
   suite_add_tcase(s, tc_core);
 
   return s;
->>>>>>> Connect to nodes in random order.
   }
 
 void rundebug()
@@ -104,9 +69,5 @@ int main(void)
   srunner_run_all(sr, CK_NORMAL);
   number_failed = srunner_ntests_failed(sr);
   srunner_free(sr);
-<<<<<<< HEAD
   return(number_failed);
-=======
-  return number_failed;
->>>>>>> Connect to nodes in random order.
   }

@@ -77,123 +77,150 @@ int MomStatusMessage::readMergeJsonStatuses(const size_t size, const char *data)
 
 
 
-const char *MomStatusMessage::readStringGpuStatus(const char *statusStrings, Json::Value &status)
+boost::ptr_vector<std::string>::iterator MomStatusMessage::readStringGpuStatus(
+
+  boost::ptr_vector<std::string>::iterator i,
+  boost::ptr_vector<std::string> mom_status,
+  Json::Value &status)
+
   {
-  if (strcmp(statusStrings, START_GPU_STATUS))
+  if (!i->compare(START_GPU_STATUS))
     {
-    return statusStrings; // Non-gpu status
+    i++;
+    }
+  else
+    {
+    return i;
     }
 
   Json::Value &gpuStatuses = status[GPU_STATUS_KEY];
   Json::Value currentGpu;
-  std::string timestamp;
-  std::string driverVer;
+  bool gpu_status = false;
 
-  const char *keyPtr = statusStrings + strlen(statusStrings) + 1;
-  for (; keyPtr && *keyPtr; keyPtr += strlen(keyPtr) + 1)
+  while (i != mom_status.end()
+         && i->compare(END_GPU_STATUS))
     {
     // Split each key-value pair by '=' character and set Json values.
-    const char *valPtr = strchr(keyPtr, '=');
-    if (!valPtr)
+    std::size_t pos = i->find_first_of("=");    
+    if (pos == std::string::npos)
       {
-      if (!strcmp(keyPtr, END_GPU_STATUS))
-        {
-        break;
-        }
-      // else
-      sprintf(log_buffer,"skipping unknown non key-value \"%s\"", keyPtr);
+      sprintf(log_buffer,"skipping unknown non key-value \"%s\"", i->c_str());
       log_err(0, __func__, log_buffer);
+      i++;
       continue;
       }
 
-    std::string key(keyPtr, valPtr - keyPtr);
-    valPtr++; // Move beyond the '=' character
+    std::string key = i->substr(0, pos);
+    std::string value = i->substr(pos+1, std::string::npos);
 
-    // get timestamp or driver version
-    if (!key.compare("timestamp"))
+    if (!key.compare("gpuid"))
       {
-      timestamp = valPtr;
-      continue;
+      gpu_status = true;
+      if (!currentGpu.empty())
+        {
+        gpuStatuses["gpus"].append(currentGpu);
+        currentGpu.clear();
+        }
+      currentGpu[key.c_str()] = value.c_str();
       }
-    if (!key.compare("driver_ver"))
+    else
       {
-      driverVer = valPtr;
-      continue;
+      if (gpu_status)
+        {
+        currentGpu[key.c_str()] = value.c_str();
+        }
+      else
+        {
+        gpuStatuses[key.c_str()] = value.c_str();
+        }
       }
-
-    // start of new gpu status
-    if (!key.compare("gpuid") && !currentGpu.empty())
-      {
-      currentGpu["timestamp"] = timestamp;
-      currentGpu["driver_ver"] = driverVer;
-      gpuStatuses.append(currentGpu);
-      currentGpu.clear();
-      }
-    currentGpu[key] = valPtr;
+    i++;
     }
 
   if (!currentGpu.empty())
     {
-    gpuStatuses.append(currentGpu);
+    gpuStatuses["gpus"].append(currentGpu);
     }
 
-  return keyPtr;
+  return i;
   }
 
 
 
-const char *MomStatusMessage::readStringMicStatus(const char *statusStrings, Json::Value &status)
+boost::ptr_vector<std::string>::iterator MomStatusMessage::readStringMicStatus(
+
+  boost::ptr_vector<std::string>::iterator i,
+  boost::ptr_vector<std::string> mom_status,
+  Json::Value &status)
+
   {
-  if (strcmp(statusStrings, START_MIC_STATUS))
+  if (!i->compare(START_MIC_STATUS))
     {
-    return statusStrings; // Non-gpu status
+    i++;
+    }
+  else
+    {
+    return i;
     }
 
   Json::Value &micStatus = status[MIC_STATUS_KEY];
   Json::Value currentMic;
+  bool mic_status = false;
 
-  const char *keyPtr = statusStrings + strlen(statusStrings) + 1;
-  for (; keyPtr && *keyPtr; keyPtr += strlen(keyPtr) + 1)
+  while (i != mom_status.end()
+         && i->compare(END_MIC_STATUS))
     {
     // Split each key-value pair by '=' character and set Json values.
-    const char *valPtr = strchr(keyPtr, '=');
-    if (!valPtr)
+    std::size_t pos = i->find_first_of("=");    
+    if (pos == std::string::npos)
       {
-      if (!strcmp(keyPtr, END_MIC_STATUS))
-        {
-        break;
-        }
-      // else
-      sprintf(log_buffer,"skipping unknown non key-value \"%s\"", keyPtr);
+      sprintf(log_buffer,"skipping unknown non key-value \"%s\"", i->c_str());
       log_err(0, __func__, log_buffer);
+      i++;
       continue;
       }
 
-    std::string key(keyPtr, valPtr - keyPtr);
-    valPtr++; // Move beyond the '=' character
+    std::string key = i->substr(0, pos);
+    std::string value = i->substr(pos+1, std::string::npos);
 
-    // start of new mic status
-    if (!key.compare("mic_id") && !currentMic.empty())
+
+    if (!key.compare("mic_id"))
       {
-      micStatus.append(currentMic);
-      currentMic.clear();
+      mic_status = true;
+      if (!currentMic.empty())
+        {
+        micStatus["mics"].append(currentMic);
+        currentMic.clear();
+        }
+      currentMic[key.c_str()] = value.c_str();
       }
-    currentMic[key] = valPtr;
+    else
+      {
+      if (mic_status)
+        {
+        currentMic[key.c_str()] = value.c_str();
+        }
+      else
+        {
+        micStatus[key.c_str()] = value.c_str();
+        }
+      }
+    i++;
     }
 
   if (!currentMic.empty())
     {
-    micStatus.append(currentMic);
+    micStatus["mics"].append(currentMic);
     }
 
-  return keyPtr;
+  return i;
   }
 
 
 
-void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *statusStrings, bool request_hierarchy)
+void MomStatusMessage::readMergeStringStatus(const char *nodeId, boost::ptr_vector<std::string> mom_status, bool request_hierarchy)
   {
-  if (nodeId == NULL || strlen(nodeId) == 0 || statusStrings == NULL || strlen(statusStrings) == 0)
+  if (nodeId == NULL || strlen(nodeId) == 0)
     {
     return;
     }
@@ -205,35 +232,35 @@ void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *sta
     {
       myStatus["first_update"] = true;
     }
-  for (const char *keyPtr = statusStrings; keyPtr && *keyPtr; keyPtr += strlen(keyPtr) + 1)
+
+
+  boost::ptr_vector<std::string>::iterator i = mom_status.begin();
+  while (i != mom_status.end())
     {
-    // Split each key-value pair by '=' character and set Json values.
-    const char *valPtr = strchr(keyPtr, '=');
-    if (!valPtr)
+    std::size_t pos = i->find_first_of("=");
+    if (pos != std::string::npos)
       {
-      const char *newPtr;
-      newPtr = readStringGpuStatus(keyPtr, myStatus);
-      if (newPtr == keyPtr)
-        {
-        newPtr = readStringMicStatus(keyPtr, myStatus);
-        }
-      if (newPtr == keyPtr) // Non GPU and non MIC
-        {
-        sprintf(log_buffer,"skipping unknown non key-value \"%s\"", keyPtr);
-        log_err(0, __func__, log_buffer);
-        }
-      else
-        {
-        keyPtr = newPtr;
-        }
-      continue;
+      std::string key = i->substr(0, pos);
+      std::string value = i->substr(pos+1, std::string::npos);
+      myStatus[key.c_str()] = value.c_str();      
+      }
+    else if (!i->compare(START_GPU_STATUS))
+      {
+      i = readStringGpuStatus(i, mom_status, myStatus);
+      }
+    else if (!i->compare(START_MIC_STATUS))
+      {
+      i = readStringMicStatus(i, mom_status, myStatus);
+      }
+    else
+      {
+      sprintf(log_buffer,"skipping unknown non key-value \"%s\"", i->c_str());
+      log_err(0, __func__, log_buffer);
       }
 
-    std::string key(keyPtr, valPtr - keyPtr);
-    valPtr++; // Move beyond the '=' character
-    myStatus[key] = valPtr;
+    if (i != mom_status.end())
+      i++;
     }
-
   statusMap[nodeId] = myStatus;
   } /* MomStatusMessage::readMergeStringStatus() */
 

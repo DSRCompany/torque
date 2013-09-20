@@ -1490,8 +1490,19 @@ void mom_server_all_update_stat(void)
 
     if (pid > 0)
       {
-      rn->statuses.clear();
-      }
+      /* We are the parent clear out the status cache. */
+      int iter = -1;
+      received_node *rn = NULL;
+
+      LastServerUpdateTime = time_now;
+
+      while ((rn = (received_node *)next_thing(received_statuses, &iter)) != NULL)
+        {
+        rn->statuses.clear();
+        }      
+      return;
+    }
+
 
 #ifdef ZMQ
     }
@@ -1525,46 +1536,48 @@ void mom_server_all_update_stat(void)
       {
 #endif /* ZMQ */
       if ((nc = update_current_path(mh)) != NULL)
+      {
+      /* write to the socket */
+      while (nc != NULL)
         {
         if (write_status_strings(mom_status, nc) < 0)
           {
-          if (write_status_strings(mom_status->str, nc) < 0)
-            {
-            nc->bad = TRUE;
-            nc->mtime = time_now;
-            nc = force_path_update(mh);
-            }
-          else 
-            {
-            LastServerUpdateTime = time_now;
-            UpdateFailCount = 0;
-
-            break;
-            }
+          nc->bad = TRUE;
+          nc->mtime = time_now;
+          nc = force_path_update(mh);
+          }
+        else
+          {
+          LastServerUpdateTime = time_now;
+          UpdateFailCount = 0;
+    
+          break;
           }
         }
+      }
 
       if (nc == NULL)
         {
         /* now, once we contact one server we stop attempting to report in */
         for (sindex = 0; sindex < PBS_MAXSERVER && rc != PBSE_NONE; sindex++)
           {
-          int tmp_rc = mom_server_update_stat(&mom_servers[sindex], mom_status->str);
-
+          int tmp_rc = mom_server_update_stat(&mom_servers[sindex], mom_status);
           if (tmp_rc != NO_SERVER_CONFIGURED)
             rc = tmp_rc;
           }
-
+    
         if (rc == COULD_NOT_CONTACT_SERVER)
           log_err(-1, __func__, "Could not contact any of the servers to send an update");
         }
       else
         close(nc->stream);
+
 #ifdef ZMQ
       }
     else /* !g_use_zmq */
       {
-      g_zstatus->updateMyJsonStatus(mom_status->str, should_request_cluster_addrs());
+
+      g_zstatus->updateMyJsonStatus(mom_status, should_request_cluster_addrs());
       rc = g_zstatus->sendStatus();
       if (rc >= 0)
         {
@@ -2223,8 +2236,6 @@ int read_cluster_addresses(
     /* tell the mom to go ahead and send an update to pbs_server */
     first_update_time = 0;
     }
-
-  free_dynamic_string(hierarchy_file);
 
 #ifdef ZMQ
   if (g_use_zmq)

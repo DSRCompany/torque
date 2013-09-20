@@ -514,6 +514,7 @@ int process_uname_str(
     
     node_name[count-1] = 0;
     free(np->nd_name);
+    cp = strdup(node_name);
     np->nd_name = (char *)cp;
     np->nd_first = init_prop(np->nd_name);
     np->nd_last = np->nd_first;
