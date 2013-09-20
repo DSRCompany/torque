@@ -226,6 +226,7 @@ void MomStatusMessage::readMergeStringStatus(const char *nodeId, boost::ptr_vect
     }
 
   Json::Value myStatus(Json::objectValue);
+  Json::Value currentNuma;
 
   myStatus[JSON_NODE_ID_KEY] = nodeId;
   if (request_hierarchy)
@@ -242,15 +243,24 @@ void MomStatusMessage::readMergeStringStatus(const char *nodeId, boost::ptr_vect
       {
       std::string key = i->substr(0, pos);
       std::string value = i->substr(pos+1, std::string::npos);
-      myStatus[key.c_str()] = value.c_str();      
+      (!currentNuma.empty()) ? (currentNuma[key.c_str()] = value.c_str()) :  myStatus[key.c_str()] = value.c_str();
       }
     else if (!i->compare(START_GPU_STATUS))
       {
-      i = readStringGpuStatus(i, mom_status, myStatus);
+      i = readStringGpuStatus(i, mom_status, (!currentNuma.empty()) ? currentNuma : myStatus);
       }
     else if (!i->compare(START_MIC_STATUS))
       {
-      i = readStringMicStatus(i, mom_status, myStatus);
+      i = readStringMicStatus(i, mom_status, (!currentNuma.empty()) ? currentNuma : myStatus);
+      }
+    else if (!i->compare(NUMA_KEYWORD))
+      {
+        if (!currentNuma.empty())
+        {
+        myStatus["numa"].append(currentNuma);
+        currentNuma.clear();
+        }
+        currentNuma["numa"] = i->c_str();
       }
     else
       {
@@ -261,7 +271,19 @@ void MomStatusMessage::readMergeStringStatus(const char *nodeId, boost::ptr_vect
     if (i != mom_status.end())
       i++;
     }
+  
+  if (!currentNuma.empty())
+    {
+    myStatus["numa"].append(currentNuma);
+    currentNuma.clear();
+    }
   statusMap[nodeId] = myStatus;
+
+  // {
+  //   sprintf(log_buffer,"JSON - \"%s\"\n", myStatus.toStyledString().c_str());
+  //   log_err(0, __func__, log_buffer);
+  // }
+
   } /* MomStatusMessage::readMergeStringStatus() */
 
 
