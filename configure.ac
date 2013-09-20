@@ -151,18 +151,14 @@ To solve this error use one of the following solution:
     ])])
   else
     zmq_path="${have_zeromq}"
-    AC_CHECK_FILE(["${zmq_path}"], [static=yes], [static=no])
-    if test "${static}" == "yes"; then
-      # ZeroMQ is enabled statically with non-standard path
-      AC_CHECK_LIB(c, main, [ TRANSPORTLIBS="$TRANSPORTLIBS ${zmq_path}" ],
-        [ AC_MSG_ERROR([ZeroMQ is enabled to be linked statically but the specified library file isn''t correct.
-       
-${zmq_path}
 
-To solve this error ensure that --with-zeromq argument is pointing to the libzmq.a library file.
-      ])], "${zmq_path}")
+    # Try to link the given path directly like it's a path to the library
+    unset ac_cv_lib_c_main
+    AC_CHECK_LIB(c, main, [have_zeromq=yes], [have_zeromq=no], "${zmq_path}")
+    if test "${have_zeromq}" == "yes"; then
+      TRANSPORTLIBS="$TRANSPORTLIBS ${zmq_path}"
     else
-      # ZeroMQ is enabled dynamically with non-standard path
+      # Try to link by adding the path to library search path
       AC_CHECK_LIB(zmq, main, [ TRANSPORTLIBS="$TRANSPORTLIBS -L${zmq_path} -lzmq" ],
         [ AC_MSG_ERROR([ZeroMQ is enabled but can not be found at the specified path.
        
@@ -173,26 +169,23 @@ If the library is installed at standard path use --with-zeromq without arguments
 TCP sockets by configuring with --without-zeromq.
       ])], "-L${zmq_path}")
     fi
+
   fi
 
-  if test "${have_jsoncpp}" == "yes" || "${have_jsoncpp}" == "no" ; then
+  if test "${have_jsoncpp}" == "yes" -o "${have_jsoncpp}" == "no" ; then
     AC_CHECK_LIB(jsoncpp, main,
       [ TRANSPORTLIBS="$TRANSPORTLIBS -ljsoncpp" ],
       [ AC_MSG_ERROR([TORQUE needs jsoncpp library if zeromq is enabled. Please either install jsoncpp, specify exact path to jsoncpp library as --with-jsoncpp argument or configure with --without-zeromq]) ])
   else
     jsoncpp_path="${have_jsoncpp}"
-    AC_CHECK_FILE(["${jsoncpp_path}"], [static=yes], [static=no])
-    if test "${static}" == "yes"; then
-      # jsoncpp is enabled statically with non-standard path
-      AC_CHECK_LIB(c, main, [ TRANSPORTLIBS="$TRANSPORTLIBS ${jsoncpp_path}" ],
-        [ AC_MSG_ERROR([JsonCPP is enabled to be linked statically but the specified library file isn''t correct.
-       
-${jsoncpp_path}
 
-To solve this error ensure that --with-jsoncpp argument is pointing to the libjsoncpp.a library file.
-      ])], "${jsoncpp_path}")
+    # Try to link the given path directly like it's a path to the library
+    unset ac_cv_lib_c_main
+    AC_CHECK_LIB(c, main, [have_jsoncpp=yes], [have_jsoncpp=no], "${jsoncpp_path}")
+    if test "${have_jsoncpp}" == "yes"; then
+      TRANSPORTLIBS="$TRANSPORTLIBS ${jsoncpp_path}"
     else
-      # ZeroMQ is enabled dynamically with non-standard path
+      # Try to link by adding the path to library search path
       AC_CHECK_LIB(jsoncpp, main, [ TRANSPORTLIBS="$TRANSPORTLIBS -L${jsoncpp_path} -ljsoncpp" ],
         [ AC_MSG_ERROR([JsonCPP is enabled but can not be found at the specified path.
        
