@@ -62,14 +62,14 @@ class TestHelper
 
     TestHelper(MomUpdate &momUpdate) : momUpdate(momUpdate) {}
 
-    int pbsReadJsonGpuStatus(Json::Value &gpusStatus)
+    int processGpuStatus(Json::Value &gpusStatus)
       {
-      return momUpdate.pbsReadJsonGpuStatus(gpusStatus);
+      return momUpdate.processGpuStatus(gpusStatus);
       }
 
-    int pbsReadJsonMicStatus(Json::Value &micsStatus)
+    int processMicStatus(Json::Value &micsStatus)
       {
-      return momUpdate.pbsReadJsonMicStatus(micsStatus);
+      return momUpdate.processMicStatus(micsStatus);
       }
 
     struct pbsnode *getCurrentNode()
@@ -91,7 +91,7 @@ static MomUpdate *gs_mom_update;
 static TestHelper *gs_test_helper;
 
 
-/* Testing function: MomUpdate::pbsReadJsonGpuStatus()
+/* Testing function: MomUpdate::processGpuStatus()
  * Input parameters:
  *    Json::Value &gpus_status - jsoncpp value with gpu statuses
  *          check: should be array value, fail with DIS_NOCOMMIT if not
@@ -115,7 +115,7 @@ static TestHelper *gs_test_helper;
  *          check: called after all parsed
  */
 
-void pbs_read_json_gpu_status_tc_setup(void)
+void process_gpu_status_tc_setup(void)
   {
   gs_mock_node = init_node();
   gs_mom_update = new MomUpdate();
@@ -132,7 +132,7 @@ void pbs_read_json_gpu_status_tc_setup(void)
   g_gpu_entry_by_id_ret = 0;
   }
 
-void pbs_read_json_gpu_status_tc_teardown(void)
+void process_gpu_status_tc_teardown(void)
   {
   deinit_node(gs_mock_node);
   g_decode_arst_ret_map.clear();
@@ -140,30 +140,30 @@ void pbs_read_json_gpu_status_tc_teardown(void)
   delete(gs_mom_update);
   }
 
-START_TEST(pbs_read_json_gpu_status_test_null_value)
+START_TEST(process_gpu_status_test_null_value)
   {
   int rc;
   /* Check null value passed */
   /* No steps should be performed */
   Json::Value nullValue;
-  rc = gs_test_helper->pbsReadJsonGpuStatus(nullValue);
+  rc = gs_test_helper->processGpuStatus(nullValue);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_gpu_status_test_non_object_value)
+START_TEST(process_gpu_status_test_non_object_value)
   {
   int rc;
   /* Check non-object value passed */
   Json::Value arrayValue(Json::arrayValue);
-  rc = gs_test_helper->pbsReadJsonGpuStatus(arrayValue);
+  rc = gs_test_helper->processGpuStatus(arrayValue);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_gpu_status_test_non_array_value)
+START_TEST(process_gpu_status_test_non_array_value)
   {
   int rc;
   /* Check non-array value passed */
@@ -171,13 +171,13 @@ START_TEST(pbs_read_json_gpu_status_test_non_array_value)
   Json::Value gpus(Json::objectValue);
   status["gpus"] = gpus;
 
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_gpu_status_test_attribute_init_fail)
+START_TEST(process_gpu_status_test_attribute_init_fail)
   {
   int rc;
   /* Check decode_arst fail */
@@ -186,14 +186,14 @@ START_TEST(pbs_read_json_gpu_status_test_attribute_init_fail)
   status["gpus"] = gpus;
 
   g_decode_arst_ret = -1;
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 1);
   ck_assert_int_eq(g_free_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_gpu_status_test_attribute_decode_fail)
+START_TEST(process_gpu_status_test_attribute_decode_fail)
   {
   int rc;
 
@@ -212,7 +212,7 @@ START_TEST(pbs_read_json_gpu_status_test_attribute_decode_fail)
   status["gpus"].append(gpu2);
 
   g_decode_arst_ret_map[4] = -1;
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 4); // Init, timestamp, driver_verstion, save gpu1
   ck_assert_int_eq(g_free_arst_ret_count, 1);
@@ -221,7 +221,7 @@ START_TEST(pbs_read_json_gpu_status_test_attribute_decode_fail)
   }
 END_TEST
 
-START_TEST(pbs_read_json_gpu_status_test_empty_array)
+START_TEST(process_gpu_status_test_empty_array)
   {
   int rc;
   /* Check value is empty array */
@@ -229,7 +229,7 @@ START_TEST(pbs_read_json_gpu_status_test_empty_array)
   Json::Value gpus(Json::arrayValue);
   status["gpus"] = gpus;
 
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 1); // init only
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -237,7 +237,7 @@ START_TEST(pbs_read_json_gpu_status_test_empty_array)
   }
 END_TEST
 
-START_TEST(pbs_read_json_gpu_status_test_no_gpuid)
+START_TEST(process_gpu_status_test_no_gpuid)
   {
   int rc;
   /* Check one of gpus have no gpuid field */
@@ -250,7 +250,7 @@ START_TEST(pbs_read_json_gpu_status_test_no_gpuid)
   status["gpus"].append(gpu1);
   status["gpus"].append(gpu2);
 
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_free_arst_ret_count, 1);
   ck_assert_int_eq(g_update_nodes_file_ret_count, 0);
@@ -259,7 +259,7 @@ START_TEST(pbs_read_json_gpu_status_test_no_gpuid)
   }
 END_TEST
 
-START_TEST(pbs_read_json_gpu_status_test_no_gpuidx_found)
+START_TEST(process_gpu_status_test_no_gpuidx_found)
   {
   int rc;
 
@@ -270,7 +270,7 @@ START_TEST(pbs_read_json_gpu_status_test_no_gpuidx_found)
   status["gpus"].append(gpu1);
 
   g_gpu_entry_by_id_ret = -1;
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 1); // init only
   ck_assert_int_eq(g_free_arst_ret_count, 1);
@@ -279,7 +279,7 @@ START_TEST(pbs_read_json_gpu_status_test_no_gpuidx_found)
   }
 END_TEST
 
-START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
+START_TEST(process_gpu_status_test_correct_statuses)
   {
   int rc;
 
@@ -297,7 +297,7 @@ START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
   status["gpus"].append(gpu1);
   status["gpus"].append(gpu2);
 
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 5); // init, 2 values, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -314,7 +314,7 @@ START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
   status["gpus"][1]["gpu_mode"] = "Exclusive_Thread";
 
   g_gpu_has_job_ret = 1;
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 5); // init, 2 values, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -331,7 +331,7 @@ START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
   status["gpus"][1]["gpu_mode"] = "Prohibited";
 
   g_gpu_has_job_ret = 0;
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 5); // init, 2 values, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -348,7 +348,7 @@ START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
   status["gpus"][1]["gpu_mode"] = "Somewhere_In_The_Clouds";
 
   g_gpu_has_job_ret = 1;
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 5); // init, 2 values, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -357,7 +357,7 @@ START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
   }
 END_TEST
 
-START_TEST(pbs_read_json_gpu_status_test_bad_status_values)
+START_TEST(process_gpu_status_test_bad_status_values)
   {
   int rc;
   Json::Value gpu1;
@@ -378,7 +378,7 @@ START_TEST(pbs_read_json_gpu_status_test_bad_status_values)
   status["gpus"].append(gpu1);
   status["gpus"].append(gpu2);
 
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 4); // init, driver_ver, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -400,7 +400,7 @@ START_TEST(pbs_read_json_gpu_status_test_bad_status_values)
   v2["Mother"] = "Marge";
   status["driver_ver"] = v2;
 
-  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  rc = gs_test_helper->processGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 3); // init, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -409,7 +409,7 @@ START_TEST(pbs_read_json_gpu_status_test_bad_status_values)
   }
 END_TEST
 
-/* Testing function: MomUpdate::pbsReadJsonMicStatus()
+/* Testing function: MomUpdate::processMicStatus()
  * Input parameters:
  *    Json::Value &mics_status - jsoncpp value with mic statuses
  *          check: should be array value, fail with DIS_NOCOMMIT if not
@@ -428,7 +428,7 @@ END_TEST
  *          check: called after all parsed
  */
 
-void pbs_read_json_mic_status_tc_setup(void)
+void process_mic_status_tc_setup(void)
   {
   gs_mock_node = init_node();
   gs_mom_update = new MomUpdate();
@@ -443,7 +443,7 @@ void pbs_read_json_mic_status_tc_setup(void)
   g_node_micstatus_list_ret_count = 0;
   }
 
-void pbs_read_json_mic_status_tc_teardown(void)
+void process_mic_status_tc_teardown(void)
   {
   deinit_node(gs_mock_node);
   g_decode_arst_ret_map.clear();
@@ -451,30 +451,30 @@ void pbs_read_json_mic_status_tc_teardown(void)
   delete(gs_mom_update);
   }
 
-START_TEST(pbs_read_json_mic_status_test_null_value)
+START_TEST(process_mic_status_test_null_value)
   {
   int rc;
   /* Check null value passed */
   /* No steps should be performed */
   Json::Value nullValue;
-  rc = gs_test_helper->pbsReadJsonMicStatus(nullValue);
+  rc = gs_test_helper->processMicStatus(nullValue);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_mic_status_test_non_object_value)
+START_TEST(process_mic_status_test_non_object_value)
   {
   int rc;
   /* Check non-object value passed */
   Json::Value arrayValue(Json::arrayValue);
-  rc = gs_test_helper->pbsReadJsonMicStatus(arrayValue);
+  rc = gs_test_helper->processMicStatus(arrayValue);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_mic_status_test_non_array_value)
+START_TEST(process_mic_status_test_non_array_value)
   {
   int rc;
   /* Check non-array value passed as mics */
@@ -482,13 +482,13 @@ START_TEST(pbs_read_json_mic_status_test_non_array_value)
   Json::Value mics(Json::objectValue);
   status["mics"] = mics;
 
-  rc = gs_test_helper->pbsReadJsonMicStatus(status);
+  rc = gs_test_helper->processMicStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_mic_status_test_attribute_init_fail)
+START_TEST(process_mic_status_test_attribute_init_fail)
   {
   int rc;
   /* Check decode_arst fail */
@@ -497,14 +497,14 @@ START_TEST(pbs_read_json_mic_status_test_attribute_init_fail)
   status["mics"] = mics;
 
   g_decode_arst_ret = -1;
-  rc = gs_test_helper->pbsReadJsonMicStatus(status);
+  rc = gs_test_helper->processMicStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 1);
   ck_assert_int_eq(g_free_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_mic_status_test_attribute_decode_fail)
+START_TEST(process_mic_status_test_attribute_decode_fail)
   {
   int rc;
 
@@ -523,7 +523,7 @@ START_TEST(pbs_read_json_mic_status_test_attribute_decode_fail)
   status["mics"].append(mic2);
 
   g_decode_arst_ret_map[2] = -1;
-  rc = gs_test_helper->pbsReadJsonMicStatus(status);
+  rc = gs_test_helper->processMicStatus(status);
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_free_arst_ret_count, 1);
@@ -531,7 +531,7 @@ START_TEST(pbs_read_json_mic_status_test_attribute_decode_fail)
   }
 END_TEST
 
-START_TEST(pbs_read_json_mic_status_test_empty_array)
+START_TEST(process_mic_status_test_empty_array)
   {
   int rc;
   /* Check value is empty array */
@@ -539,7 +539,7 @@ START_TEST(pbs_read_json_mic_status_test_empty_array)
   Json::Value mics(Json::arrayValue);
   status["mics"] = mics;
 
-  rc = gs_test_helper->pbsReadJsonMicStatus(status);
+  rc = gs_test_helper->processMicStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 1); // init only
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -547,7 +547,7 @@ START_TEST(pbs_read_json_mic_status_test_empty_array)
   }
 END_TEST
 
-START_TEST(pbs_read_json_mic_status_test_no_micid)
+START_TEST(process_mic_status_test_no_micid)
   {
   int rc;
   /* Check one of mics have no micid field */
@@ -560,7 +560,7 @@ START_TEST(pbs_read_json_mic_status_test_no_micid)
   status["mics"].append(mic1);
   status["mics"].append(mic2);
 
-  rc = gs_test_helper->pbsReadJsonMicStatus(status);
+  rc = gs_test_helper->processMicStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_free_arst_ret_count, 1);
   ck_assert_int_eq(g_node_micstatus_list_ret_count, 0); // node wasn't touched
@@ -568,7 +568,7 @@ START_TEST(pbs_read_json_mic_status_test_no_micid)
   }
 END_TEST
 
-START_TEST(pbs_read_json_mic_status_test_correct_statuses)
+START_TEST(process_mic_status_test_correct_statuses)
   {
   int rc;
 
@@ -586,7 +586,7 @@ START_TEST(pbs_read_json_mic_status_test_correct_statuses)
   status["mics"].append(mic1);
   status["mics"].append(mic2);
 
-  rc = gs_test_helper->pbsReadJsonMicStatus(status);
+  rc = gs_test_helper->processMicStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 3); // init only
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -600,7 +600,7 @@ START_TEST(pbs_read_json_mic_status_test_correct_statuses)
   status["mics"][0]["key1"] = 123;
   status["mics"][1]["key1"] = true;
 
-  rc = gs_test_helper->pbsReadJsonMicStatus(status);
+  rc = gs_test_helper->processMicStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 3); // init only
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -614,7 +614,7 @@ START_TEST(pbs_read_json_mic_status_test_correct_statuses)
   status["mics"][2]["micid"] = "mic3";
   status["mics"][2]["key1"] = "value1";
 
-  rc = gs_test_helper->pbsReadJsonMicStatus(status);
+  rc = gs_test_helper->processMicStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
   ck_assert_int_eq(g_decode_arst_ret_count, 4); // init only
   ck_assert_int_eq(g_free_arst_ret_count, 0);
@@ -624,7 +624,7 @@ START_TEST(pbs_read_json_mic_status_test_correct_statuses)
   }
 END_TEST
 
-/* Testing function: MomUpdate::pbsReadJsonStatus()
+/* Testing function: MomUpdate::readJsonStatus()
  * Input parameters:
  *    const size_t sz - data buffer size
  *          check: fail if <= 0
@@ -664,7 +664,7 @@ END_TEST
  *          check: called once for each successful parsed node
  */
 
-void pbs_read_json_status_tc_setup(void)
+void read_json_status_tc_setup(void)
   {
   gs_mock_node = init_node();
   gs_mom_update = new MomUpdate();
@@ -688,7 +688,7 @@ void pbs_read_json_status_tc_setup(void)
   g_update_node_state_ret_count = 0;
   }
 
-void pbs_read_json_status_tc_teardown(void)
+void read_json_status_tc_teardown(void)
   {
   deinit_node(gs_mock_node);
   g_decode_arst_ret_map.clear();
@@ -696,36 +696,36 @@ void pbs_read_json_status_tc_teardown(void)
   delete(gs_mom_update);
   }
 
-START_TEST(pbs_read_json_status_test_null_value)
+START_TEST(read_json_status_test_null_value)
   {
   int rc;
 
   /* Check null size */
-  rc = gs_mom_update->pbsReadJsonStatus(0, "{}");
+  rc = gs_mom_update->readJsonStatus(0, "{}");
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
 
   /* Check null data */
   g_decode_arst_ret_count = 0;
-  rc = gs_mom_update->pbsReadJsonStatus(10, NULL);
+  rc = gs_mom_update->readJsonStatus(10, NULL);
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
 
   /* Check empty message */
   g_decode_arst_ret_count = 0;
-  rc = gs_mom_update->pbsReadJsonStatus(3, "{}");
+  rc = gs_mom_update->readJsonStatus(3, "{}");
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
 
   /* Check malformed data */
   g_decode_arst_ret_count = 0;
-  rc = gs_mom_update->pbsReadJsonStatus(5, "asdf");
+  rc = gs_mom_update->readJsonStatus(5, "asdf");
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_non_status_type)
+START_TEST(read_json_status_test_non_status_type)
   {
   int rc;
   Json::Value root;
@@ -736,13 +736,13 @@ START_TEST(pbs_read_json_status_test_non_status_type)
   root["messageType"] = "asdf";
   result = writer.write(root);
 
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_non_array_body)
+START_TEST(read_json_status_test_non_array_body)
   {
   int rc;
   Json::Value root;
@@ -752,7 +752,7 @@ START_TEST(pbs_read_json_status_test_non_array_body)
   /* Check missed body */
   root["messageType"] = "status";
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
 
@@ -760,13 +760,13 @@ START_TEST(pbs_read_json_status_test_non_array_body)
   root["body"] = "asdf";
   g_decode_arst_ret_count = 0;
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_wrong_senderId)
+START_TEST(read_json_status_test_wrong_senderId)
   {
   int rc;
   Json::Value root;
@@ -777,7 +777,7 @@ START_TEST(pbs_read_json_status_test_wrong_senderId)
 
   /* Check missed senderId */
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
 
@@ -785,13 +785,13 @@ START_TEST(pbs_read_json_status_test_wrong_senderId)
   root["senderId"] = 23;
   g_decode_arst_ret_count = 0;
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_empty_body)
+START_TEST(read_json_status_test_empty_body)
   {
   int rc;
   Json::Value root;
@@ -803,13 +803,13 @@ START_TEST(pbs_read_json_status_test_empty_body)
   root["body"] = body;
 
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
-  ck_assert_int_eq(g_decode_arst_ret_count, 1);
+  ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_node_without_id)
+START_TEST(read_json_status_test_node_without_id)
   {
   int rc;
   Json::Value root;
@@ -820,13 +820,13 @@ START_TEST(pbs_read_json_status_test_node_without_id)
   root["body"][0]["key"] = "value";
 
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
-  ck_assert_int_eq(g_decode_arst_ret_count, 1);
+  ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_node_not_found)
+START_TEST(read_json_status_test_node_not_found)
   {
   int rc;
   Json::Value root;
@@ -838,13 +838,13 @@ START_TEST(pbs_read_json_status_test_node_not_found)
   result = writer.write(root);
 
   g_find_nodebyname_ret = NULL;
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
-  ck_assert_int_eq(g_decode_arst_ret_count, 1);
+  ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_first_update_is_set)
+START_TEST(read_json_status_test_first_update_is_set)
   {
   int rc;
   Json::Value root;
@@ -857,7 +857,7 @@ START_TEST(pbs_read_json_status_test_first_update_is_set)
 
   /* First update is set to false */
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 1); // wrote nothing
   ck_assert_int_eq(g_remove_hello_ret_count, 0);
@@ -872,7 +872,7 @@ START_TEST(pbs_read_json_status_test_first_update_is_set)
   root["body"][0]["node"] = "node1";
   root["body"][0]["first_update"] = 1;
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 1);
   ck_assert_int_eq(g_remove_hello_ret_count, 0);
@@ -886,7 +886,7 @@ START_TEST(pbs_read_json_status_test_first_update_is_set)
   root["body"][0]["node"] = "node1";
   root["body"][0]["first_update"] = true;
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 1);
   ck_assert_int_eq(g_remove_hello_ret_count, 1);
@@ -895,7 +895,7 @@ START_TEST(pbs_read_json_status_test_first_update_is_set)
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_message_error)
+START_TEST(read_json_status_test_message_error)
   {
   int rc;
   Json::Value root;
@@ -908,7 +908,7 @@ START_TEST(pbs_read_json_status_test_message_error)
 
   /* error message present, down_on_error is false */
   result = writer.write(root);
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_update_node_state_ret_count, 0);
@@ -919,14 +919,14 @@ START_TEST(pbs_read_json_status_test_message_error)
 
   /* error message present, down_on_error is true */
   g_get_svr_attr_l_ret_mom_down_on_error = 1;
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_update_node_state_ret_count, 1);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_state)
+START_TEST(read_json_status_test_state)
   {
   int rc;
   Json::Value root;
@@ -939,7 +939,7 @@ START_TEST(pbs_read_json_status_test_state)
   result = writer.write(root);
 
   /* State is updated */
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_process_state_str_val_ret_count, 1);
@@ -950,14 +950,14 @@ START_TEST(pbs_read_json_status_test_state)
 
   /* State isn't updated if dont_change_state */
   gs_mock_node->nd_mom_reported_down = 1;
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_process_state_str_val_ret_count, 0);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_uname)
+START_TEST(read_json_status_test_uname)
   {
   int rc;
   Json::Value root;
@@ -970,7 +970,7 @@ START_TEST(pbs_read_json_status_test_uname)
   result = writer.write(root);
 
   /* any mom disallowed */
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_process_uname_str_ret_count, 0);
@@ -981,14 +981,14 @@ START_TEST(pbs_read_json_status_test_uname)
 
   /* State isn't updated if dont_change_state */
   allow_any_mom = 1;
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_process_uname_str_ret_count, 1);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_jobdata)
+START_TEST(read_json_status_test_jobdata)
   {
   int rc;
   Json::Value root;
@@ -1001,7 +1001,7 @@ START_TEST(pbs_read_json_status_test_jobdata)
   result = writer.write(root);
 
   /* jobdata presents, mom_job_sync property isn't set */
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_update_job_data_ret_count, 0);
@@ -1012,14 +1012,14 @@ START_TEST(pbs_read_json_status_test_jobdata)
 
   /* jobdata presents, mom_job_sync property is set */
   g_get_svr_attr_l_ret_mom_job_sync = 1;
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_update_job_data_ret_count, 1);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_jobs)
+START_TEST(read_json_status_test_jobs)
   {
   int rc;
   Json::Value root;
@@ -1032,7 +1032,7 @@ START_TEST(pbs_read_json_status_test_jobs)
   result = writer.write(root);
 
   /* jobs present, mom_job_sync property isn't set */
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_enqueue_threadpool_request_ret_count, 0);
@@ -1043,14 +1043,14 @@ START_TEST(pbs_read_json_status_test_jobs)
 
   /* jobs present, mom_job_sync property is set */
   g_get_svr_attr_l_ret_mom_job_sync = 1;
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_enqueue_threadpool_request_ret_count, 1);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_ncpus)
+START_TEST(read_json_status_test_ncpus)
   {
   int rc;
   Json::Value root;
@@ -1062,14 +1062,14 @@ START_TEST(pbs_read_json_status_test_ncpus)
   root["body"][0]["ncpus"] = "123";
   result = writer.write(root);
 
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   ck_assert_int_eq(g_handle_auto_np_val_ret_count, 1);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_attribute_init_fail)
+START_TEST(read_json_status_test_attribute_init_fail)
   {
   int rc;
   Json::Value root;
@@ -1095,13 +1095,13 @@ START_TEST(pbs_read_json_status_test_attribute_init_fail)
   result = writer.write(root);
 
   g_decode_arst_ret = -1;
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, -1);
   ck_assert_int_eq(g_decode_arst_ret_count, 1);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_attribute_decode_fail)
+START_TEST(read_json_status_test_attribute_decode_fail)
   {
   int rc;
   Json::Value root;
@@ -1127,13 +1127,13 @@ START_TEST(pbs_read_json_status_test_attribute_decode_fail)
   result = writer.write(root);
 
   g_decode_arst_ret_map[2] = -1;
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   }
 END_TEST
 
-START_TEST(pbs_read_json_status_test_other_values)
+START_TEST(read_json_status_test_other_values)
   {
   int rc;
   Json::Value root;
@@ -1158,7 +1158,7 @@ START_TEST(pbs_read_json_status_test_other_values)
 
   result = writer.write(root);
 
-  rc = gs_mom_update->pbsReadJsonStatus(result.length(), result.c_str());
+  rc = gs_mom_update->readJsonStatus(result.length(), result.c_str());
   ck_assert_int_eq(rc, 0);
   ck_assert_int_eq(g_decode_arst_ret_count, 2);
   }
@@ -1169,52 +1169,52 @@ Suite *zmq_process_mom_update_suite(void)
   Suite *s = suite_create("zmq_process_mom_update_suite methods");
   TCase *tc_core;
   
-  tc_core = tcase_create("pbs_read_json_gpu_status_tc");
-  tcase_add_checked_fixture(tc_core, pbs_read_json_gpu_status_tc_setup,
-      pbs_read_json_gpu_status_tc_teardown);
-  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_null_value);
-  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_non_array_value);
-  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_attribute_init_fail);
-  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_attribute_decode_fail);
-  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_empty_array);
-  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_no_gpuid);
-  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_no_gpuidx_found);
-  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_correct_statuses);
-  tcase_add_test(tc_core, pbs_read_json_gpu_status_test_bad_status_values);
+  tc_core = tcase_create("process_gpu_status_tc");
+  tcase_add_checked_fixture(tc_core, process_gpu_status_tc_setup,
+      process_gpu_status_tc_teardown);
+  tcase_add_test(tc_core, process_gpu_status_test_null_value);
+  tcase_add_test(tc_core, process_gpu_status_test_non_array_value);
+  tcase_add_test(tc_core, process_gpu_status_test_attribute_init_fail);
+  tcase_add_test(tc_core, process_gpu_status_test_attribute_decode_fail);
+  tcase_add_test(tc_core, process_gpu_status_test_empty_array);
+  tcase_add_test(tc_core, process_gpu_status_test_no_gpuid);
+  tcase_add_test(tc_core, process_gpu_status_test_no_gpuidx_found);
+  tcase_add_test(tc_core, process_gpu_status_test_correct_statuses);
+  tcase_add_test(tc_core, process_gpu_status_test_bad_status_values);
   suite_add_tcase(s, tc_core);
 
-  tc_core = tcase_create("pbs_read_json_mic_status_tc");
-  tcase_add_checked_fixture(tc_core, pbs_read_json_mic_status_tc_setup,
-      pbs_read_json_mic_status_tc_teardown);
-  tcase_add_test(tc_core, pbs_read_json_mic_status_test_null_value);
-  tcase_add_test(tc_core, pbs_read_json_mic_status_test_non_array_value);
-  tcase_add_test(tc_core, pbs_read_json_mic_status_test_attribute_init_fail);
-  tcase_add_test(tc_core, pbs_read_json_mic_status_test_attribute_decode_fail);
-  tcase_add_test(tc_core, pbs_read_json_mic_status_test_empty_array);
-  tcase_add_test(tc_core, pbs_read_json_mic_status_test_no_micid);
-  tcase_add_test(tc_core, pbs_read_json_mic_status_test_correct_statuses);
+  tc_core = tcase_create("process_mic_status_tc");
+  tcase_add_checked_fixture(tc_core, process_mic_status_tc_setup,
+      process_mic_status_tc_teardown);
+  tcase_add_test(tc_core, process_mic_status_test_null_value);
+  tcase_add_test(tc_core, process_mic_status_test_non_array_value);
+  tcase_add_test(tc_core, process_mic_status_test_attribute_init_fail);
+  tcase_add_test(tc_core, process_mic_status_test_attribute_decode_fail);
+  tcase_add_test(tc_core, process_mic_status_test_empty_array);
+  tcase_add_test(tc_core, process_mic_status_test_no_micid);
+  tcase_add_test(tc_core, process_mic_status_test_correct_statuses);
   suite_add_tcase(s, tc_core);
 
-  tc_core = tcase_create("pbs_read_json_status_tc");
-  tcase_add_checked_fixture(tc_core, pbs_read_json_status_tc_setup,
-      pbs_read_json_status_tc_teardown);
-  tcase_add_test(tc_core, pbs_read_json_status_test_null_value);
-  tcase_add_test(tc_core, pbs_read_json_status_test_non_status_type);
-  tcase_add_test(tc_core, pbs_read_json_status_test_non_array_body);
-  tcase_add_test(tc_core, pbs_read_json_status_test_wrong_senderId);
-  tcase_add_test(tc_core, pbs_read_json_status_test_empty_body);
-  tcase_add_test(tc_core, pbs_read_json_status_test_node_without_id);
-  tcase_add_test(tc_core, pbs_read_json_status_test_node_not_found);
-  tcase_add_test(tc_core, pbs_read_json_status_test_first_update_is_set);
-  tcase_add_test(tc_core, pbs_read_json_status_test_message_error);
-  tcase_add_test(tc_core, pbs_read_json_status_test_state);
-  tcase_add_test(tc_core, pbs_read_json_status_test_uname);
-  tcase_add_test(tc_core, pbs_read_json_status_test_jobdata);
-  tcase_add_test(tc_core, pbs_read_json_status_test_jobs);
-  tcase_add_test(tc_core, pbs_read_json_status_test_ncpus);
-  tcase_add_test(tc_core, pbs_read_json_status_test_attribute_init_fail);
-  tcase_add_test(tc_core, pbs_read_json_status_test_attribute_decode_fail);
-  tcase_add_test(tc_core, pbs_read_json_status_test_other_values);
+  tc_core = tcase_create("read_json_status_tc");
+  tcase_add_checked_fixture(tc_core, read_json_status_tc_setup,
+      read_json_status_tc_teardown);
+  tcase_add_test(tc_core, read_json_status_test_null_value);
+  tcase_add_test(tc_core, read_json_status_test_non_status_type);
+  tcase_add_test(tc_core, read_json_status_test_non_array_body);
+  tcase_add_test(tc_core, read_json_status_test_wrong_senderId);
+  tcase_add_test(tc_core, read_json_status_test_empty_body);
+  tcase_add_test(tc_core, read_json_status_test_node_without_id);
+  tcase_add_test(tc_core, read_json_status_test_node_not_found);
+  tcase_add_test(tc_core, read_json_status_test_first_update_is_set);
+  tcase_add_test(tc_core, read_json_status_test_message_error);
+  tcase_add_test(tc_core, read_json_status_test_state);
+  tcase_add_test(tc_core, read_json_status_test_uname);
+  tcase_add_test(tc_core, read_json_status_test_jobdata);
+  tcase_add_test(tc_core, read_json_status_test_jobs);
+  tcase_add_test(tc_core, read_json_status_test_ncpus);
+  tcase_add_test(tc_core, read_json_status_test_attribute_init_fail);
+  tcase_add_test(tc_core, read_json_status_test_attribute_decode_fail);
+  tcase_add_test(tc_core, read_json_status_test_other_values);
   suite_add_tcase(s, tc_core);
   return s;
   }

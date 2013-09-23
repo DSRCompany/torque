@@ -32,20 +32,16 @@ int process_uname_str(struct pbsnode *np, const char *str);
 int handle_auto_np_val(struct pbsnode *np, const char *str);
 int save_node_status(struct pbsnode *current, pbs_attribute *temp);
 void update_job_data(struct pbsnode *np, const char *jobstring_in);
+struct pbsnode *get_numa_from_str(const char *str, struct pbsnode *np);
 
 
 namespace TrqZStatus {
 
-int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
+int MomUpdate::readJsonStatus(const size_t sz, const char *data)
   {
-  long              mom_job_sync = 0;
-  long              auto_np = 0;
-  long              down_on_error = 0;
   Json::Value       root;
-  std::stringstream status_stream;
   Json::Value      *temp_value;
-  pbs_attribute     temp;
-  int               rc;
+  int               rc = 0;
 
   if (LOGLEVEL >= 10)
     {
@@ -92,26 +88,13 @@ int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
   sprintf(log_buffer, "Got json statuses message from senderId:%s", temp_value->asString().c_str());
   log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
 
-  get_svr_attr_l(SRV_ATR_MomJobSync, &mom_job_sync);
-  get_svr_attr_l(SRV_ATR_AutoNodeNP, &auto_np);
-  get_svr_attr_l(SRV_ATR_DownOnError, &down_on_error);
+  get_svr_attr_l(SRV_ATR_MomJobSync, &m_mom_job_sync);
+  get_svr_attr_l(SRV_ATR_AutoNodeNP, &m_auto_np);
+  get_svr_attr_l(SRV_ATR_DownOnError, &m_down_on_error);
 
-  /* Before filling the "temp" pbs_attribute, initialize it.
-   * The second and third parameter to decode_arst are never
-   * used, so just leave them empty. (GBS) */
-  memset(&temp, 0, sizeof(temp));
-
-  if ((rc = decode_arst(&temp, NULL, NULL, NULL, 0)) != PBSE_NONE)
-    {
-    log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "cannot initialize attribute");
-    return(rc);
-    }
-
-  // TODO: Handle NUMA status field.
   for (Json::ValueIterator i = body.begin(); i != body.end(); i++)
     {
     Json::Value &node_status = *i;
-    bool dont_change_state = false;
 
     Json::Value node_id_val = node_status.removeMember("node");
     if (node_id_val.isNull() || !node_id_val.isString())
@@ -119,27 +102,96 @@ int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
       log_err(-1, __func__, "received a status without node id specified. Ignored");
       continue;
       }
-    std::string nodeId = node_id_val.asString();
+    std::string node_id = node_id_val.asString();
 
-    sprintf(log_buffer, "Got status nodeId:%s", nodeId.c_str());
+    sprintf(log_buffer, "Got status node_id:%s", node_id.c_str());
     log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
 
-    m_current_node = find_nodebyname(nodeId.c_str());
+    m_current_node = find_nodebyname(node_id.c_str());
     if(m_current_node == NULL)
       {
       // TODO: Check is the node trusted and create an entinty for the node if not found.
       //       See svr_is_request() code.
-      sprintf(log_buffer, "the node with id '%s' not found. Ignored", nodeId.c_str());
+      sprintf(log_buffer, "the node with id '%s' not found. Ignored", node_id.c_str());
       log_err(-1, __func__, log_buffer);
       continue;
       }
 
-    mutex_mgr node_mutex(m_current_node->nd_mutex, true);
+    /* NOTE: The node is locked from here */
 
     if (LOGLEVEL >= 10)
       {
-      snprintf(log_buffer, LOCAL_LOG_BUF_SIZE, "handle status for node '%s'", nodeId.c_str());
+      snprintf(log_buffer, LOCAL_LOG_BUF_SIZE, "handle status for node '%s'", node_id.c_str());
       log_event(PBSEVENT_ADMIN,PBS_EVENTCLASS_SERVER,__func__,log_buffer);
+      }
+
+    rc = processNodeStatus(node_status);
+    if (rc)
+      {
+      break;
+      }
+
+    Json::Value &numa_array = node_status["numa"];
+    if (numa_array.isArray())
+      {
+      for (Json::ValueIterator j = numa_array.begin(); j != numa_array.end(); j++)
+        {
+        Json::Value &numa = (*j);
+        Json::Value &numaId = numa["numa"];
+        if (!numaId.isString())
+          {
+          break;
+          }
+        /* NOTE: The old node would be unlocked and the new one would be locked */
+        m_current_node = get_numa_from_str(numaId.asCString(), m_current_node);
+        if (m_current_node == NULL)
+          {
+          break;
+          }
+        rc = processNodeStatus(numa);
+        if (rc)
+          {
+          break;
+          }
+        }
+      }
+
+    if (m_current_node != NULL)
+      {
+      /* NOTE: The node is unlocked now */
+      pthread_mutex_unlock(m_current_node->nd_mutex);
+      m_current_node = NULL;
+      }
+    } /* END for status["body"] */
+
+  if (m_current_node != NULL)
+    {
+    /* NOTE: The node is unlocked now */
+    pthread_mutex_unlock(m_current_node->nd_mutex);
+    m_current_node = NULL;
+    }
+
+  return(rc);
+  } /* END mom_read_json_status() */
+
+
+int MomUpdate::processNodeStatus(Json::Value &node_status)
+  {
+    Json::Value      *temp_value;
+    std::stringstream status_stream;
+    bool              dont_change_state = false;
+    pbs_attribute     temp;
+    int               rc = 0;
+
+    /* Before filling the "temp" pbs_attribute, initialize it.
+     * The second and third parameter to decode_arst are never
+     * used, so just leave them empty. (GBS) */
+    memset(&temp, 0, sizeof(temp));
+
+    if ((rc = decode_arst(&temp, NULL, NULL, NULL, 0)) != PBSE_NONE)
+      {
+      log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, "cannot initialize attribute");
+      return(rc);
       }
 
     if (m_current_node->nd_mom_reported_down)
@@ -158,14 +210,18 @@ int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
         }
 
       /* Check special values like gpu, mic statuses and values that aren't node attributes */
+      if (!key.compare(NUMA_KEYWORD))
+        {
+        continue;
+        }
       if (!key.compare(GPU_STATUS_KEY))
         {
-        pbsReadJsonGpuStatus(*temp_value);
+        processGpuStatus(*temp_value);
         continue;
         }
       else if (!key.compare(MIC_STATUS_KEY))
         {
-        pbsReadJsonMicStatus(*temp_value);
+        processMicStatus(*temp_value);
         continue;
         }
       else if (!key.compare("first_update"))
@@ -232,7 +288,7 @@ int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
         }
       else if (!key.compare("message"))
         {
-        if (temp_value->isString() && !temp_value->asString().compare("ERROR") && down_on_error)
+        if (temp_value->isString() && !temp_value->asString().compare("ERROR") && m_down_on_error)
           {
           update_node_state(m_current_node, INUSE_DOWN);
           dont_change_state = true;
@@ -240,14 +296,14 @@ int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
         }
       else if (!key.compare("jobdata"))
         {
-        if (temp_value->isString() && mom_job_sync)
+        if (temp_value->isString() && m_mom_job_sync)
           {
           update_job_data(m_current_node, temp_value->asCString());
           }
         }
       else if (!key.compare("jobs"))
         {
-        if (temp_value->isString() && mom_job_sync)
+        if (temp_value->isString() && m_mom_job_sync)
           {
           std::string value = temp_value->asString();
           size_t len = value.length() + strlen(m_current_node->nd_name) + 2;
@@ -304,15 +360,11 @@ int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
       status_stream.str("");
       status_stream.clear();
       }
+    return rc;
+  }
 
-    node_mutex.unlock();
-    m_current_node = NULL;
-    } /* END for status["body"] */
 
-  return(DIS_SUCCESS);
-  } /* END mom_read_json_status() */
-
-int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
+int MomUpdate::processGpuStatus(Json::Value &gpus_status)
   {
   pbs_attribute     temp;
   std::stringstream gpuinfo_stream;
@@ -605,7 +657,7 @@ int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
   }  /* END pbs_read_json_gpu_status() */
 
 
-int MomUpdate::pbsReadJsonMicStatus(Json::Value &mics_status)
+int MomUpdate::processMicStatus(Json::Value &mics_status)
   {
   pbs_attribute     temp;
   std::stringstream micinfo_stream;

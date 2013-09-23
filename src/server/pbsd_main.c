@@ -549,7 +549,7 @@ void *start_process_pbs_server_port(
 #ifdef ZMQ
 
 /**
- * A C wrapper for MomUpdate::pbsReadJsonStatus()
+ * A C wrapper for MomUpdate::readJsonStatus()
  * Process json status from the given buffer.
  * @param sz the message buffer size in bytes
  * @param data pointer to the json data buffer
@@ -557,7 +557,7 @@ void *start_process_pbs_server_port(
  */
 int pbs_read_json_status(const size_t sz, const char *data)
   {
-  return g_mom_status_update.pbsReadJsonStatus(sz, data);
+  return g_mom_status_update.readJsonStatus(sz, data);
   }
 
 /**

@@ -36,7 +36,8 @@ int g_remove_hello_ret_count;
 int g_update_job_data_ret_count;
 int g_update_node_state_ret_count;
 
-struct pbsnode * g_find_nodebyname_ret;
+struct pbsnode *g_get_numa_from_str_ret;
+struct pbsnode *g_find_nodebyname_ret;
 long g_get_svr_attr_l_ret_mom_down_on_error;
 long g_get_svr_attr_l_ret_mom_job_sync;
 long g_get_svr_attr_l_ret_auto_node_np;
@@ -180,22 +181,22 @@ int get_svr_attr_l(int attr_index, long *l)
   return 0;
   }
 
+struct pbsnode *get_numa_from_str(const char *str, struct pbsnode *np)
+  {
+  return g_get_numa_from_str_ret;
+  }
+
 void *send_hierarchy_threadtask(void *vp)
   {
   return NULL;
   }
 
-mutex_mgr::mutex_mgr(pthread_mutex_t *mutex, bool is_locked)
+int pthread_mutex_lock(pthread_mutex_t *mutex) throw()
   {
-  // Do nothing
+  return 0;
   }
 
-mutex_mgr::~mutex_mgr()
-  {
-  // Do nothing
-  }
-
-int mutex_mgr::unlock()
+int pthread_mutex_unlock(pthread_mutex_t *mutex) throw()
   {
   return 0;
   }

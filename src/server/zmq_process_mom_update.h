@@ -26,7 +26,7 @@ class MomUpdate
      * @param data pointer to the json data buffer
      * @return 0 if succeeded, -1 otherwise
      */
-    int pbsReadJsonStatus(const size_t sz, const char *data);
+    int readJsonStatus(const size_t sz, const char *data);
 
   private:
     /**
@@ -37,19 +37,31 @@ class MomUpdate
      * A pointer to the currently being processed node
      */
     struct pbsnode *m_current_node;
+    /**
+     * Local cache of server properties
+     */
+    long m_mom_job_sync;
+    long m_auto_np;
+    long m_down_on_error;
 
     /**
      * Process GPU part of the status
      * @param gpusStatus a value object containing the node GPUs status
      * @return 0 if succeeded, -1 otherwise
      */
-    int pbsReadJsonGpuStatus(Json::Value &gpusStatus);
+    int processGpuStatus(Json::Value &gpusStatus);
     /**
      * Process MIC part of the status
      * @param micsStatus a value object containing the node MICs status
      * @return 0 if succeeded, -1 otherwise
      */
-    int pbsReadJsonMicStatus(Json::Value &micsStatus);
+    int processMicStatus(Json::Value &micsStatus);
+    /**
+     * Process one node status values
+     * @param nodeStatus a value object containing one node status
+     * @return 0 if succeeded, -1 otherwise
+     */
+    int processNodeStatus(Json::Value &nodeStatus);
   };
 
 }
