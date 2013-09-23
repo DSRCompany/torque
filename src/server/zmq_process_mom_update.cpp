@@ -313,13 +313,14 @@ int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
   return(DIS_SUCCESS);
   } /* END mom_read_json_status() */
 
-
 int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
   {
   pbs_attribute     temp;
   std::stringstream gpuinfo_stream;
   unsigned int      startgpucnt;
   int               rc;
+  const Json::Value *temp_value;
+  int               drv_ver;
 
   if (LOGLEVEL >= 7)
     {
@@ -328,7 +329,13 @@ int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
     }
 
   /* Check input */
-  if (gpus_status.isNull() || !gpus_status.isArray())
+  if (gpus_status.isNull() || !gpus_status.isObject())
+    {
+    return(DIS_NOCOMMIT);
+    }
+
+  Json::Value &gpus_array = gpus_status["gpus"];
+  if (!gpus_array.isArray())
     {
     return(DIS_NOCOMMIT);
     }
@@ -349,10 +356,47 @@ int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
     return(DIS_NOCOMMIT);
     }
 
-  for (unsigned int i = 0; i < gpus_status.size(); i++)
+  /* Process timestamp value */
+  temp_value = &gpus_status["timestamp"];
+  if (temp_value->isString())
     {
-    Json::Value &gpu_status = gpus_status[i];
-    const Json::Value *temp_value;
+    if (decode_arst(&temp, NULL, NULL, temp_value->asCString(), 0))
+      {
+      DBPRT(("pbsReadJsonGpuStatus: cannot add attributes\n"));
+      free_arst(&temp);
+      return(DIS_NOCOMMIT);
+      }
+    }
+
+  temp_value = &gpus_status["driver_ver"];
+  if (!temp_value->isNull())
+    {
+    std::stringstream drv_ver_str;
+    if (temp_value->isString())
+      {
+      drv_ver = atoi(temp_value->asCString());
+      drv_ver_str << temp_value->asString();
+      }
+    else if (temp_value->isInt())
+      {
+      drv_ver = temp_value->asInt();
+      drv_ver_str << drv_ver;
+      }
+
+    if (drv_ver_str.rdbuf()->in_avail())
+      {
+      if (decode_arst(&temp, NULL, NULL, drv_ver_str.str().c_str(), 0))
+        {
+        DBPRT(("pbsReadJsonGpuStatus: cannot add attributes\n"));
+        free_arst(&temp);
+        return(DIS_NOCOMMIT);
+        }
+      }
+    }
+
+  for (unsigned int i = 0; i < gpus_array.size(); i++)
+    {
+    Json::Value &gpu_status = gpus_array[i];
     std::string gpuid;
     int gpuidx = -1;
 
@@ -407,6 +451,8 @@ int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
       }
 
     gpuinfo_stream << "gpu[" << gpuidx << "]=gpu_id=" << gpuid;
+
+    m_current_node->nd_gpusn[gpuidx].driver_ver = drv_ver;
 
     /* mark that this gpu node is not virtual */
     m_current_node->nd_gpus_real = TRUE;
@@ -518,19 +564,6 @@ int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
         // continue.
         continue;
         }
-      else if (!key.compare("drv_ver"))
-        {
-        int drv_ver;
-        if (temp_value->isString())
-          {
-          drv_ver = atoi(temp_value->asCString());
-          }
-        else if (temp_value->isInt())
-          {
-          drv_ver = temp_value->asInt();
-          }
-        m_current_node->nd_gpusn[gpuidx].driver_ver = drv_ver;
-        }
 
       if (temp_value->isString() || temp_value->isBool())
         {
@@ -559,9 +592,9 @@ int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
     } /* END of for GPUs */
 
   /* maintain the gpu count, if it has changed we need to update the nodes file */
-  if (gpus_status.size() != startgpucnt)
+  if (gpus_array.size() != startgpucnt)
     {
-    m_current_node->nd_ngpus = gpus_status.size();
+    m_current_node->nd_ngpus = gpus_array.size();
 
     /* update the nodes file */
     update_nodes_file(m_current_node);
@@ -582,11 +615,18 @@ int MomUpdate::pbsReadJsonMicStatus(Json::Value &mics_status)
 
   if (LOGLEVEL >= 7)
     {
-    sprintf(log_buffer, "received mic status from node %s", (m_current_node != NULL) ? m_current_node->nd_name : "NULL");
+    sprintf(log_buffer, "received mic status from node %s",
+        (m_current_node != NULL) ? m_current_node->nd_name : "NULL");
     log_record(PBSEVENT_SCHED, PBS_EVENTCLASS_REQUEST, __func__, log_buffer);
     }
 
-  if (mics_status.isNull() || !mics_status.isArray())
+  if (mics_status.isNull() || !mics_status.isObject())
+    {
+    return(DIS_NOCOMMIT);
+    }
+
+  Json::Value &mics_array = mics_status["mics"];
+  if (!mics_array.isArray())
     {
     return(DIS_NOCOMMIT);
     }
@@ -604,9 +644,9 @@ int MomUpdate::pbsReadJsonMicStatus(Json::Value &mics_status)
     return(DIS_NOCOMMIT);
     }
 
-  for (unsigned int i = 0; i < mics_status.size(); i++)
+  for (unsigned int i = 0; i < mics_array.size(); i++)
     {
-    Json::Value &mic_status = mics_status[i];
+    Json::Value &mic_status = mics_array[i];
     const Json::Value *temp_value;
     std::string micid;
 

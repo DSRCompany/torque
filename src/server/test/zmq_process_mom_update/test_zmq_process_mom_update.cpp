@@ -152,13 +152,26 @@ START_TEST(pbs_read_json_gpu_status_test_null_value)
   }
 END_TEST
 
+START_TEST(pbs_read_json_gpu_status_test_non_object_value)
+  {
+  int rc;
+  /* Check non-object value passed */
+  Json::Value arrayValue(Json::arrayValue);
+  rc = gs_test_helper->pbsReadJsonGpuStatus(arrayValue);
+  ck_assert_int_eq(rc, DIS_NOCOMMIT);
+  ck_assert_int_eq(g_decode_arst_ret_count, 0);
+  }
+END_TEST
+
 START_TEST(pbs_read_json_gpu_status_test_non_array_value)
   {
   int rc;
   /* Check non-array value passed */
-  /* No steps should be performed */
-  Json::Value intValue(Json::intValue);
-  rc = gs_test_helper->pbsReadJsonGpuStatus(intValue);
+  Json::Value status;
+  Json::Value gpus(Json::objectValue);
+  status["gpus"] = gpus;
+
+  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
@@ -168,7 +181,9 @@ START_TEST(pbs_read_json_gpu_status_test_attribute_init_fail)
   {
   int rc;
   /* Check decode_arst fail */
-  Json::Value status(Json::arrayValue);
+  Json::Value status(Json::objectValue);
+  Json::Value gpus(Json::arrayValue);
+  status["gpus"] = gpus;
 
   g_decode_arst_ret = -1;
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
@@ -182,26 +197,24 @@ START_TEST(pbs_read_json_gpu_status_test_attribute_decode_fail)
   {
   int rc;
 
-  Json::Value status(Json::arrayValue);
+  Json::Value status(Json::objectValue);
+  status["timestamp"] = "1234567890";
+  status["driver_ver"] = "1234.00033";
   Json::Value gpu1;
   Json::Value gpu2;
 
   gpu1["gpuid"] = "gpu1";
-  gpu1["timestamp"] = "1234567890";
-  gpu1["driver_ver"] = "1234.00033";
   gpu1["gpu_mode"] = "Normal";
   gpu2["gpuid"] = "gpu2";
-  gpu2["timestamp"] = "1234567890";
-  gpu2["driver_ver"] = "1234.00033";
   gpu2["gpu_mode"] = "Exclusive";
 
-  status.append(gpu1);
-  status.append(gpu2);
+  status["gpus"].append(gpu1);
+  status["gpus"].append(gpu2);
 
-  g_decode_arst_ret_map[2] = -1;
+  g_decode_arst_ret_map[4] = -1;
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
-  ck_assert_int_eq(g_decode_arst_ret_count, 2); // init only
+  ck_assert_int_eq(g_decode_arst_ret_count, 4); // Init, timestamp, driver_verstion, save gpu1
   ck_assert_int_eq(g_free_arst_ret_count, 1);
   ck_assert_int_eq(g_update_nodes_file_ret_count, 0);
   ck_assert_int_eq(g_node_gpustatus_list_ret_count, 0); // node was updated
@@ -212,7 +225,9 @@ START_TEST(pbs_read_json_gpu_status_test_empty_array)
   {
   int rc;
   /* Check value is empty array */
-  Json::Value status(Json::arrayValue);
+  Json::Value status(Json::objectValue);
+  Json::Value gpus(Json::arrayValue);
+  status["gpus"] = gpus;
 
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
@@ -226,14 +241,14 @@ START_TEST(pbs_read_json_gpu_status_test_no_gpuid)
   {
   int rc;
   /* Check one of gpus have no gpuid field */
-  Json::Value status(Json::arrayValue);
+  Json::Value status(Json::objectValue);
   Json::Value gpu1;
   gpu1["gpuid"] = "gpu1";
   gpu1["testKey"] = "testValue";
   Json::Value gpu2;
   gpu2["testKey"] = "testValue";
-  status.append(gpu1);
-  status.append(gpu2);
+  status["gpus"].append(gpu1);
+  status["gpus"].append(gpu2);
 
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
@@ -248,11 +263,11 @@ START_TEST(pbs_read_json_gpu_status_test_no_gpuidx_found)
   {
   int rc;
 
-  Json::Value status(Json::arrayValue);
+  Json::Value status(Json::objectValue);
   Json::Value gpu1;
   gpu1["gpuid"] = "gpu1";
   gpu1["testKey"] = "testValue";
-  status.append(gpu1);
+  status["gpus"].append(gpu1);
 
   g_gpu_entry_by_id_ret = -1;
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
@@ -268,25 +283,23 @@ START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
   {
   int rc;
 
-  Json::Value status(Json::arrayValue);
+  Json::Value status;
   Json::Value gpu1;
   Json::Value gpu2;
 
   gpu1["gpuid"] = "gpu1";
-  gpu1["timestamp"] = "1234567890";
-  gpu1["driver_ver"] = "1234.00033";
   gpu1["gpu_mode"] = "Normal";
   gpu2["gpuid"] = "gpu2";
-  gpu2["timestamp"] = "1234567890";
-  gpu2["driver_ver"] = "1234.00033";
   gpu2["gpu_mode"] = "Exclusive";
 
-  status.append(gpu1);
-  status.append(gpu2);
+  status["timestamp"] = "1234567890";
+  status["driver_ver"] = "1234.00033";
+  status["gpus"].append(gpu1);
+  status["gpus"].append(gpu2);
 
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
-  ck_assert_int_eq(g_decode_arst_ret_count, 3); // init only
+  ck_assert_int_eq(g_decode_arst_ret_count, 5); // init, 2 values, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
   ck_assert_int_eq(g_update_nodes_file_ret_count, 1);
   ck_assert_int_eq(g_node_gpustatus_list_ret_count, 1); // node was updated
@@ -295,15 +308,15 @@ START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
   g_update_nodes_file_ret_count = 0;
   g_node_gpustatus_list_ret_count = 0;
 
-  status[0]["gpuid"] = "gpu1";
-  status[1]["gpuid"] = "gpu2";
-  status[0]["gpu_mode"] = "Default";
-  status[1]["gpu_mode"] = "Exclusive_Thread";
+  status["gpus"][0]["gpuid"] = "gpu1";
+  status["gpus"][1]["gpuid"] = "gpu2";
+  status["gpus"][0]["gpu_mode"] = "Default";
+  status["gpus"][1]["gpu_mode"] = "Exclusive_Thread";
 
   g_gpu_has_job_ret = 1;
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
-  ck_assert_int_eq(g_decode_arst_ret_count, 3); // init only
+  ck_assert_int_eq(g_decode_arst_ret_count, 5); // init, 2 values, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
   ck_assert_int_eq(g_update_nodes_file_ret_count, 0);
   ck_assert_int_eq(g_node_gpustatus_list_ret_count, 1); // node was updated
@@ -312,15 +325,15 @@ START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
   g_update_nodes_file_ret_count = 0;
   g_node_gpustatus_list_ret_count = 0;
 
-  status[0]["gpuid"] = "gpu1";
-  status[1]["gpuid"] = "gpu2";
-  status[0]["gpu_mode"] = "Exclusive_Process";
-  status[1]["gpu_mode"] = "Prohibited";
+  status["gpus"][0]["gpuid"] = "gpu1";
+  status["gpus"][1]["gpuid"] = "gpu2";
+  status["gpus"][0]["gpu_mode"] = "Exclusive_Process";
+  status["gpus"][1]["gpu_mode"] = "Prohibited";
 
   g_gpu_has_job_ret = 0;
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
-  ck_assert_int_eq(g_decode_arst_ret_count, 3); // init only
+  ck_assert_int_eq(g_decode_arst_ret_count, 5); // init, 2 values, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
   ck_assert_int_eq(g_update_nodes_file_ret_count, 0);
   ck_assert_int_eq(g_node_gpustatus_list_ret_count, 1); // node was updated
@@ -329,15 +342,15 @@ START_TEST(pbs_read_json_gpu_status_test_correct_statuses)
   g_update_nodes_file_ret_count = 0;
   g_node_gpustatus_list_ret_count = 0;
 
-  status[0]["gpuid"] = "gpu1";
-  status[1]["gpuid"] = "gpu2";
-  status[0]["gpu_mode"] = "Exclusive_Process";
-  status[1]["gpu_mode"] = "Somewhere_In_The_Clouds";
+  status["gpus"][0]["gpuid"] = "gpu1";
+  status["gpus"][1]["gpuid"] = "gpu2";
+  status["gpus"][0]["gpu_mode"] = "Exclusive_Process";
+  status["gpus"][1]["gpu_mode"] = "Somewhere_In_The_Clouds";
 
   g_gpu_has_job_ret = 1;
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
-  ck_assert_int_eq(g_decode_arst_ret_count, 3); // init only
+  ck_assert_int_eq(g_decode_arst_ret_count, 5); // init, 2 values, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
   ck_assert_int_eq(g_update_nodes_file_ret_count, 0);
   ck_assert_int_eq(g_node_gpustatus_list_ret_count, 1); // node was updated
@@ -349,33 +362,49 @@ START_TEST(pbs_read_json_gpu_status_test_bad_status_values)
   int rc;
   Json::Value gpu1;
   Json::Value gpu2;
-  Json::Value status(Json::arrayValue);
+  Json::Value status;
 
   gpu1["gpuid"] = "gpu1";
-  gpu1["timestamp"] = 6174;
-  gpu1["driver_ver"] = 6174;
   gpu1["gpu_mode"] = 6174;
 
   Json::Value v1;
   Json::Value v2;
 
   gpu2["gpuid"] = "gpu2";
-  v1[0] = "Spock";
-  v1[1] = "Kirk";
-  gpu2["timestamp"] = v1;
-  v2["Father"] = "Homer";
-  v2["Mother"] = "Marge";
-  gpu2["driver_ver"] = v2;
   gpu2["gpu_mode"] = Json::Value();
 
-  status.append(gpu1);
-  status.append(gpu1);
+  status["timestamp"] = 6174;
+  status["driver_ver"] = 6174;
+  status["gpus"].append(gpu1);
+  status["gpus"].append(gpu2);
 
   rc = gs_test_helper->pbsReadJsonGpuStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
-  ck_assert_int_eq(g_decode_arst_ret_count, 3); // init only
+  ck_assert_int_eq(g_decode_arst_ret_count, 4); // init, driver_ver, 2 gpus
   ck_assert_int_eq(g_free_arst_ret_count, 0);
   ck_assert_int_eq(g_update_nodes_file_ret_count, 1);
+  ck_assert_int_eq(g_node_gpustatus_list_ret_count, 1); // node was updated
+
+  g_decode_arst_ret_count = 0;
+  g_free_arst_ret_count = 0;
+  g_update_nodes_file_ret_count = 0;
+  g_node_gpustatus_list_ret_count = 0;
+
+  status["gpus"][0]["gpuid"] = "gpu1";
+  status["gpus"][1]["gpuid"] = "gpu2";
+
+  v1[0] = "Spock";
+  v1[1] = "Kirk";
+  status["timestamp"] = v1;
+  v2["Father"] = "Homer";
+  v2["Mother"] = "Marge";
+  status["driver_ver"] = v2;
+
+  rc = gs_test_helper->pbsReadJsonGpuStatus(status);
+  ck_assert_int_eq(rc, DIS_SUCCESS);
+  ck_assert_int_eq(g_decode_arst_ret_count, 3); // init, 2 gpus
+  ck_assert_int_eq(g_free_arst_ret_count, 0);
+  ck_assert_int_eq(g_update_nodes_file_ret_count, 0);
   ck_assert_int_eq(g_node_gpustatus_list_ret_count, 1); // node was updated
   }
 END_TEST
@@ -434,13 +463,26 @@ START_TEST(pbs_read_json_mic_status_test_null_value)
   }
 END_TEST
 
+START_TEST(pbs_read_json_mic_status_test_non_object_value)
+  {
+  int rc;
+  /* Check non-object value passed */
+  Json::Value arrayValue(Json::arrayValue);
+  rc = gs_test_helper->pbsReadJsonMicStatus(arrayValue);
+  ck_assert_int_eq(rc, DIS_NOCOMMIT);
+  ck_assert_int_eq(g_decode_arst_ret_count, 0);
+  }
+END_TEST
+
 START_TEST(pbs_read_json_mic_status_test_non_array_value)
   {
   int rc;
-  /* Check non-array value passed */
-  /* No steps should be performed */
-  Json::Value intValue(Json::intValue);
-  rc = gs_test_helper->pbsReadJsonMicStatus(intValue);
+  /* Check non-array value passed as mics */
+  Json::Value status;
+  Json::Value mics(Json::objectValue);
+  status["mics"] = mics;
+
+  rc = gs_test_helper->pbsReadJsonMicStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
   ck_assert_int_eq(g_decode_arst_ret_count, 0);
   }
@@ -450,7 +492,9 @@ START_TEST(pbs_read_json_mic_status_test_attribute_init_fail)
   {
   int rc;
   /* Check decode_arst fail */
-  Json::Value status(Json::arrayValue);
+  Json::Value status(Json::objectValue);
+  Json::Value mics(Json::arrayValue);
+  status["mics"] = mics;
 
   g_decode_arst_ret = -1;
   rc = gs_test_helper->pbsReadJsonMicStatus(status);
@@ -464,7 +508,7 @@ START_TEST(pbs_read_json_mic_status_test_attribute_decode_fail)
   {
   int rc;
 
-  Json::Value status(Json::arrayValue);
+  Json::Value status;
   Json::Value mic1;
   Json::Value mic2;
 
@@ -475,8 +519,8 @@ START_TEST(pbs_read_json_mic_status_test_attribute_decode_fail)
   mic2["key1"] = "1234567890";
   mic2["key2"] = "1234.00033";
 
-  status.append(mic1);
-  status.append(mic2);
+  status["mics"].append(mic1);
+  status["mics"].append(mic2);
 
   g_decode_arst_ret_map[2] = -1;
   rc = gs_test_helper->pbsReadJsonMicStatus(status);
@@ -491,7 +535,9 @@ START_TEST(pbs_read_json_mic_status_test_empty_array)
   {
   int rc;
   /* Check value is empty array */
-  Json::Value status(Json::arrayValue);
+  Json::Value status(Json::objectValue);
+  Json::Value mics(Json::arrayValue);
+  status["mics"] = mics;
 
   rc = gs_test_helper->pbsReadJsonMicStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
@@ -505,14 +551,14 @@ START_TEST(pbs_read_json_mic_status_test_no_micid)
   {
   int rc;
   /* Check one of mics have no micid field */
-  Json::Value status(Json::arrayValue);
+  Json::Value status;
   Json::Value mic1;
   mic1["micid"] = "mic1";
   mic1["testKey"] = "testValue";
   Json::Value mic2;
   mic2["testKey"] = "testValue";
-  status.append(mic1);
-  status.append(mic2);
+  status["mics"].append(mic1);
+  status["mics"].append(mic2);
 
   rc = gs_test_helper->pbsReadJsonMicStatus(status);
   ck_assert_int_eq(rc, DIS_NOCOMMIT);
@@ -526,7 +572,7 @@ START_TEST(pbs_read_json_mic_status_test_correct_statuses)
   {
   int rc;
 
-  Json::Value status(Json::arrayValue);
+  Json::Value status;
   Json::Value mic1;
   Json::Value mic2;
 
@@ -537,8 +583,8 @@ START_TEST(pbs_read_json_mic_status_test_correct_statuses)
   mic2["key1"] = "1234567890";
   mic2["key2"] = "1234.00033";
 
-  status.append(mic1);
-  status.append(mic2);
+  status["mics"].append(mic1);
+  status["mics"].append(mic2);
 
   rc = gs_test_helper->pbsReadJsonMicStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
@@ -549,10 +595,10 @@ START_TEST(pbs_read_json_mic_status_test_correct_statuses)
   g_free_arst_ret_count = 0;
   g_node_micstatus_list_ret_count = 0;
 
-  status[0]["micid"] = "mic1";
-  status[1]["micid"] = "mic2";
-  status[0]["key1"] = 123;
-  status[1]["key1"] = true;
+  status["mics"][0]["micid"] = "mic1";
+  status["mics"][1]["micid"] = "mic2";
+  status["mics"][0]["key1"] = 123;
+  status["mics"][1]["key1"] = true;
 
   rc = gs_test_helper->pbsReadJsonMicStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
@@ -563,10 +609,10 @@ START_TEST(pbs_read_json_mic_status_test_correct_statuses)
   g_free_arst_ret_count = 0;
   g_node_micstatus_list_ret_count = 0;
 
-  status[0]["micid"] = "mic1";
-  status[1]["micid"] = "mic2";
-  status[2]["micid"] = "mic3";
-  status[2]["key1"] = "value1";
+  status["mics"][0]["micid"] = "mic1";
+  status["mics"][1]["micid"] = "mic2";
+  status["mics"][2]["micid"] = "mic3";
+  status["mics"][2]["key1"] = "value1";
 
   rc = gs_test_helper->pbsReadJsonMicStatus(status);
   ck_assert_int_eq(rc, DIS_SUCCESS);
