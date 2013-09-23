@@ -270,6 +270,11 @@ unsigned int            pbs_server_port_dis;
  * The number of TCP port to be listened for other MOMs status messages by ZeroMQ.
  */
 unsigned int pbs_status_port = 0;
+
+/**
+ * Mom status update processor
+ */
+TrqZStatus::MomUpdate g_mom_status_update;
 #endif /* ZMQ */
 
 bool                    auto_send_hierarchy = true;
@@ -542,6 +547,18 @@ void *start_process_pbs_server_port(
 
 
 #ifdef ZMQ
+
+/**
+ * A C wrapper for MomUpdate::pbsReadJsonStatus()
+ * Process json status from the given buffer.
+ * @param sz the message buffer size in bytes
+ * @param data pointer to the json data buffer
+ * @return 0 if succeeded, -1 otherwise
+ */
+int pbs_read_json_status(const size_t sz, const char *data)
+  {
+  return g_mom_status_update.pbsReadJsonStatus(sz, data);
+  }
 
 /**
  * Process ZeroMQ MOM status receiving port. Read and process all the received messages.
