@@ -108,9 +108,9 @@ int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
     }
 
   // TODO: Handle NUMA status field.
-  for (unsigned int i = 0; i < body.size(); i++)
+  for (Json::ValueIterator i = body.begin(); i != body.end(); i++)
     {
-    Json::Value &node_status = body[i];
+    Json::Value &node_status = *i;
     bool dont_change_state = false;
 
     Json::Value node_id_val = node_status.removeMember("node");
@@ -147,11 +147,10 @@ int MomUpdate::pbsReadJsonStatus(const size_t sz, const char *data)
       dont_change_state = true;
       }
 
-    // TODO: use iterators!
-    for (unsigned int i = 0; i < node_status.getMemberNames().size(); i++)
+    for (Json::ValueIterator j = node_status.begin(); j != node_status.end(); j++)
       {
-      std::string key = node_status.getMemberNames()[i];
-      temp_value = &node_status[key];
+      std::string key = j.memberName();
+      temp_value = &(*j);
 
       if (temp_value->isNull())
         {
@@ -394,9 +393,9 @@ int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
       }
     }
 
-  for (unsigned int i = 0; i < gpus_array.size(); i++)
+  for (Json::ValueIterator i = gpus_array.begin(); i != gpus_array.end(); i++)
     {
-    Json::Value &gpu_status = gpus_array[i];
+    Json::Value &gpu_status = *i;
     std::string gpuid;
     int gpuidx = -1;
 
@@ -466,10 +465,10 @@ int MomUpdate::pbsReadJsonGpuStatus(Json::Value &gpus_status)
       m_current_node->nd_gpusn[gpuidx].gpuid = strdup(gpuid.c_str());
       }
 
-    for (unsigned int i = 0; i < gpu_status.getMemberNames().size(); i++)
+    for (Json::ValueIterator j = gpu_status.begin(); j != gpu_status.end(); j++)
       {
-      std::string key = gpu_status.getMemberNames()[i];
-      temp_value = &gpu_status[key];
+      std::string key = j.memberName();
+      temp_value = &(*j);
 
       if (temp_value->isNull())
         {
@@ -644,9 +643,9 @@ int MomUpdate::pbsReadJsonMicStatus(Json::Value &mics_status)
     return(DIS_NOCOMMIT);
     }
 
-  for (unsigned int i = 0; i < mics_array.size(); i++)
+  for (Json::ValueIterator i = mics_array.begin(); i != mics_array.end(); i++)
     {
-    Json::Value &mic_status = mics_array[i];
+    Json::Value &mic_status = *i;
     const Json::Value *temp_value;
     std::string micid;
 
@@ -674,10 +673,10 @@ int MomUpdate::pbsReadJsonMicStatus(Json::Value &mics_status)
     micinfo_stream << "mic[" << mic_count << "]=" << micid;
 
     // Print all other mic status values
-    for (unsigned int i = 0; i < mic_status.getMemberNames().size(); i++)
+    for (Json::ValueIterator j = mic_status.begin(); j != mic_status.end(); j++)
       {
-      std::string key = mic_status.getMemberNames()[i];
-      temp_value = &mic_status[key];
+      std::string key = j.memberName();
+      temp_value = &(*j);
 
       if (temp_value->isString() || temp_value->isBool())
         {
