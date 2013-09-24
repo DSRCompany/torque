@@ -558,9 +558,13 @@ void check_if_in_nodes_file(
   struct addrinfo    *addr_info;
   struct sockaddr_in *sai;
   unsigned long       ipaddr;
+  unsigned short      port = 0;
 
   if ((colon = strchr(hostname, ':')) != NULL)
+    {
     *colon = '\0';
+    port = atoi(colon+1);
+    }
   
   if ((pnode = find_nodebyname(hostname)) == NULL)
     {
@@ -599,7 +603,7 @@ void check_if_in_nodes_file(
       }
     }
 
-  rm_port = pnode->nd_mom_rm_port;
+  rm_port = (port) ? port : pnode->nd_mom_rm_port;
     
   pnode->nd_in_hierarchy = TRUE;
 
