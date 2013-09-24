@@ -250,6 +250,10 @@ extern struct work_task *apply_job_delete_nanny(struct job *, int);
 extern int     net_move(job *, struct batch_request *);
 void          on_job_exit_task(struct work_task *);
 
+#ifdef ZMQ
+extern bool g_use_zmq;
+#endif /* ZMQ */
+
 /* Private functions in this file */
 
 void  init_abt_job(job *);
@@ -265,7 +269,6 @@ void  resume_net_move(struct work_task *);
 void  rm_files(char *);
 void  stop_me(int);
 void change_logs_handler(int sig);
-
 /* private data */
 
 int run_change_logs = FALSE;
@@ -558,14 +561,10 @@ void check_if_in_nodes_file(
   struct addrinfo    *addr_info;
   struct sockaddr_in *sai;
   unsigned long       ipaddr;
-  unsigned short      port = 0;
 
   if ((colon = strchr(hostname, ':')) != NULL)
-    {
     *colon = '\0';
-    port = atoi(colon+1);
-    }
-  
+    
   if ((pnode = find_nodebyname(hostname)) == NULL)
     {
     snprintf(log_buf, sizeof(log_buf), 
@@ -603,8 +602,8 @@ void check_if_in_nodes_file(
       }
     }
 
-  rm_port = (port) ? port : pnode->nd_mom_rm_port;
-    
+  rm_port = pnode->nd_mom_rm_port;
+
   pnode->nd_in_hierarchy = TRUE;
 
   if (pnode->nd_hierarchy_level > level_index)
@@ -646,6 +645,10 @@ void convert_level_to_send_format(
     check_if_in_nodes_file(nc->name, level_index, rm_port);
     level_string << nc->name;
 
+#ifdef ZMQ
+	if (g_use_zmq)
+      rm_port = ntohs(nc->sock_addr.sin_port);
+#endif
     if (rm_port != PBS_MANAGER_SERVICE_PORT)
       {
       level_string << ":";
