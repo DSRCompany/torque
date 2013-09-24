@@ -11,7 +11,7 @@ AM_LDFLAGS = @CHECK_LIBS@ ${lib_LTLIBRARIES} ${TRANSPORTLIBS}
 
 check_PROGRAMS = test_mom_zstatus
 
-libmom_zstatus_la_SOURCES = scaffolding.c ${PROG_ROOT}/mom_zstatus.cpp $(PROG_ROOT)/../lib/Libutils/u_mom_hierarchy.c $(PROG_ROOT)/../lib/Libutils/u_resizable_array.c
+libmom_zstatus_la_SOURCES = scaffolding.c ${PROG_ROOT}/mom_zstatus.cpp $(PROG_ROOT)/../lib/Libutils/u_mom_hierarchy.c $(PROG_ROOT)/../lib/Libutils/u_resizable_array.c $(PROG_ROOT)/../lib/Libutils/u_mu.c $(PROG_ROOT)/../lib/Libutils/u_misc.c
 libmom_zstatus_la_LDFLAGS = @CHECK_LIBS@ -shared -lgcov
 
 test_mom_zstatus_SOURCES = test_mom_zstatus.cpp

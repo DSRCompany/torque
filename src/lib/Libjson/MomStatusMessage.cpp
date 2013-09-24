@@ -253,7 +253,7 @@ void MomStatusMessage::readMergeStringStatus(const char *nodeId, boost::ptr_vect
       {
       i = readStringMicStatus(i, mom_status, (!currentNuma.empty()) ? currentNuma : myStatus);
       }
-    else if (!i->compare(NUMA_KEYWORD))
+    else if (!i->compare(0, strlen(NUMA_KEYWORD), NUMA_KEYWORD))
       {
         if (!currentNuma.empty())
         {

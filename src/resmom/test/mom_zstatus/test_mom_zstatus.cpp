@@ -925,10 +925,11 @@ END_TEST
 START_TEST(zstatus_public_updateMyJsonStatus_test)
   {
   ZStatus zstatus(NULL, "M");
+  boost::ptr_vector<std::string> mom_status;
 
   /* Test */
   g_MomStatusMessage_readMergeStringStatus_count = 0;
-  zstatus.updateMyJsonStatus(NULL, true);
+  zstatus.updateMyJsonStatus(mom_status, true);
   ck_assert_int_eq(g_MomStatusMessage_readMergeStringStatus_count, 1);
   }
 END_TEST

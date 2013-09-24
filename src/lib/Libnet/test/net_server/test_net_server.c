@@ -130,10 +130,17 @@ START_TEST(init_znetwork_test)
   rc = init_znetwork(mockId, mockEndpoint, mockFunc, 0);
   ck_assert_int_eq(rc, -1);
   g_zmq_context = mockPtr;
+}
+END_TEST
 
 
 START_TEST(test_add_connection)
   {
+  int rc;
+  enum zmq_connection_e mockId = (enum zmq_connection_e)0;
+  void * const mockPtr = malloc(sizeof(int));
+  const char *mockEndpoint = "tcp://*:12345";
+
   fail_unless(add_connection(-1, ToServerDIS, 0, 0, PBS_SOCK_INET, accept_conn, 0) == PBSE_BAD_PARAMETER);
   fail_unless(add_connection(PBS_NET_MAX_CONNECTIONS, ToServerDIS, 0, 0, PBS_SOCK_INET, accept_conn, 0) == PBSE_BAD_PARAMETER);
 

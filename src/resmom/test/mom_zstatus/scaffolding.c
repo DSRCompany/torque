@@ -9,6 +9,7 @@
 #include "mom_server.h"
 #include "resmon.h"
 #include "log.h"
+#include "mom_hierarchy.h"
 
 
 void          *g_zmq_context;
@@ -38,6 +39,9 @@ std::map<int, void *>    g_zmq_socket_ret_map;
 int                 g_zmq_socket_count;
 
 const char **dis_emsg;
+
+mom_hierarchy_t *mh;
+int  mom_hierarchy_retry_time;
 
 #if 0
 int                 g_get_max_num_descriptors_ret;
@@ -179,7 +183,7 @@ int MomStatusMessage::readMergeJsonStatuses(const size_t size, const char *data)
   return g_MomStatusMessage_readMergeJsonStatuses_ret;
   }
 
-void MomStatusMessage::readMergeStringStatus(const char *nodeId, const char *statusStrings, bool request_hierarchy)
+void MomStatusMessage::readMergeStringStatus(const char *nodeId, boost::ptr_vector<std::string> mom_status, bool request_hierarchy)
   {
   g_MomStatusMessage_readMergeStringStatus_count++;
   }
@@ -307,5 +311,27 @@ int socket_connect_addr(
   char            **error_msg)
   {
   fprintf(stderr, "The call to diswsl needs to be mocked!!\n");
+  exit(1);
+  }
+
+int pbs_getaddrinfo(const char *hostname, struct addrinfo *in, struct addrinfo **out)
+  {
+  return(0);
+  }
+
+ssize_t read_ac_socket(int fd, void *buf, ssize_t count)
+  { 
+  fprintf(stderr, "The call to read_nonblocking_socket needs to be mocked!!\n");
+  exit(1);
+  }
+
+ssize_t write_ac_socket(int fd, const void *buf, ssize_t count)
+  {
+  return(0);
+  }
+
+int get_parent_and_child(char *start, char **parent, char **child, char **end)
+  {
+  fprintf(stderr, "The call to get_parent_and_child needs to be mocked!!\n");
   exit(1);
   }
