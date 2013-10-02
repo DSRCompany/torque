@@ -1979,8 +1979,12 @@ int process_host_name(
   unsigned long       ipaddr;
   struct addrinfo    *addr_info;
   struct sockaddr_in  sa;
-      
+  
+#ifdef ZMQ      
   rm_port = g_use_zmq ? PBS_MOM_STATUS_SERVICE_PORT : PBS_MANAGER_SERVICE_PORT;
+#else
+  rm_port = PBS_MANAGER_SERVICE_PORT;
+#endif
   
   if ((colon = strchr(hostname, ':')) != NULL)
     {
