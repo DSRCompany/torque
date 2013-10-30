@@ -1,3 +1,4 @@
+#include "pbs_config.h"
 #include "license_pbs.h" /* See here for the software license */
 #include <stdlib.h>
 #include <stdio.h> /* fprintf */
@@ -15,6 +16,10 @@
 #include "pbs_nodes.h" /* pbsnode */
 #include "sched_cmds.h" /* SCH_SCHEDULE_NULL */
 #include "threadpool.h"
+#ifdef ZMQ
+#include "zmq_process_mom_update.h"
+#endif
+
 
 hello_container failures;
 pthread_mutex_t *job_log_mutex;
@@ -539,3 +544,23 @@ work_task *pop_timed_task(
   {
   return(NULL);
   }
+
+int init_znetwork(zmq_connection_e, char const*, void* (*)(void*), int)
+  {
+  return(0);
+  }
+void init_zmq() {}
+void deinit_zmq() {}
+void start_socket_thread(int, void* (*)(void*)) {}
+int process_status_request(void*, int (*)(unsigned long, char const*), bool)
+  {
+  return(0);
+  }
+#ifdef ZMQ
+Json::Reader::Reader() {}
+Json::Features::Features() {}
+int TrqZStatus::MomUpdate::readJsonStatus(unsigned long, char const*)
+  {
+  return(0);
+  }
+#endif

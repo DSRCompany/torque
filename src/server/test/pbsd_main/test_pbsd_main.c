@@ -1,3 +1,4 @@
+#include "pbs_config.h"
 #include "license_pbs.h" /* See here for the software license */
 #include "net_connect.h" /* pbs_net_t */
 #include "pbsd_main.h"
