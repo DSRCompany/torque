@@ -234,6 +234,7 @@ m4_ifdef([AM_SILENT_RULES],[
     AM_SILENT_RULES(no)
     AC_CONFIG_FILES(src/test/scaffold_fail/Makefile
     src/test/torque_test_lib/Makefile
+    src/test/mock_lib/Makefile
     src/cmds/test/Makefile
     src/cmds/test/MXML/Makefile
     src/cmds/test/common_cmds/Makefile
@@ -306,6 +307,8 @@ m4_ifdef([AM_SILENT_RULES],[
     src/lib/Libcmds/test/set_resource/Makefile
     src/lib/Libcsv/test/Makefile
     src/lib/Libcsv/test/csv/Makefile
+    src/lib/Libcsv/gtest/Makefile
+    src/lib/Libcsv/gtest/csv/Makefile
     src/lib/Libdis/test/Makefile
     src/lib/Libdis/test/discui_/Makefile
     src/lib/Libdis/test/discul_/Makefile

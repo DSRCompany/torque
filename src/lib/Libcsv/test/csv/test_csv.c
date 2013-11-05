@@ -9,8 +9,7 @@
 
 START_TEST(test_one)
   {
-
-
+  csv_find_value(NULL, NULL);
   }
 END_TEST
 

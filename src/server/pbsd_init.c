@@ -798,6 +798,7 @@ void prepare_mom_hierarchy(
   char            log_buf[LOCAL_LOG_BUF_SIZE];
   int             fds;
 
+  // FIXME: memleak! mh initialized twice. Possible misprint.
   mh = initialize_mom_hierarchy();
 
   mh = initialize_mom_hierarchy();
