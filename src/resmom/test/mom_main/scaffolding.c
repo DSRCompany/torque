@@ -27,6 +27,10 @@
 #include <vector>
 #include <boost/ptr_container/ptr_vector.hpp>
 
+#ifdef ZMQ
+#include "mom_zstatus.h"
+#endif
+
 extern mom_hierarchy_t *mh;
 
 #ifdef PENABLE_LINUX26_CPUSETS
@@ -914,3 +918,69 @@ return 0;
 
 
 #endif
+
+#ifdef ZMQ
+
+int  wait_zrequest(time_t waittime, long *SState)
+  {
+  return 0;
+  }
+
+int  init_znetwork(enum zmq_connection_e id, const char *, void *(*readfunc)(void *), int)
+  {
+  return 0;
+  }
+
+int init_zmq()
+  {
+  return 0;
+  }
+
+int init_zmq_connection(enum zmq_connection_e id, int  socket_type)
+  {
+  return 0;
+  }
+
+void deinit_zmq()
+  {
+  }
+
+int process_status_request(void *zsock, int (*func)(const size_t, const char *), bool wait)
+  {
+  return 0;
+  }
+
+namespace TrqZStatus 
+{
+  ZStatus::ZStatus(mom_hierarchy_t *mh, const char *mom_alias):
+    m_zmq_server_socket(NULL),
+    m_mh(mh),
+    m_mom_alias(mom_alias),
+    m_cpath(0),
+    m_clevel(0)
+    {
+    }
+
+  ZStatus::~ZStatus()
+    {
+    }
+
+  int ZStatus::readStatus(unsigned long, char const*)
+    {
+    return 0;
+    }
+}
+
+namespace TrqJson
+{
+  void MomStatusMessage::generateBody(Json::Value &messageBody)
+    {
+    }
+
+  std::string MomStatusMessage::getMessageType()
+    {
+    return std::string("");
+    }
+}
+
+#endif /* ZMQ */

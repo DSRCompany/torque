@@ -4,7 +4,7 @@ AM_CFLAGS = -g -DTEST_FUNCTION -I${PROG_ROOT}/ -I${PROG_ROOT}/${PBS_MACH} --cove
 
 lib_LTLIBRARIES = libmom_main.la
 
-AM_LDFLAGS = @CHECK_LIBS@ ${lib_LTLIBRARIES}
+AM_LDFLAGS = @CHECK_LIBS@ ${lib_LTLIBRARIES} ${TRANSPORTLIBS}
 
 check_PROGRAMS = test_mom_main
 

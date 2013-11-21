@@ -30,19 +30,19 @@ public:
 
 TEST(Test1, Test2) {
   cvs_mock c;
-  gmock_cvs_mock gc;  
-  
+  gmock_cvs_mock gc;
+
   EXPECT_CALL(gc, csv_length(test_str));
 
   EXPECT_EQ(0, gc.csv_length(test_str));
-  EXPECT_EQ(1, c.csv_length(test_str));
+  EXPECT_EQ(3, c.csv_length(test_str));
 }
- 
+
 int main(int argc, char **argv)
 {
   testing::InitGoogleMock(&argc, argv);
   //InitGoogleTest(&argc, argv);
   printf("Hello, world!\n");
- 
+
   return RUN_ALL_TESTS();
 }
