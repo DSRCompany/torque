@@ -269,7 +269,7 @@ unsigned int            pbs_server_port_dis;
 /**
  * The number of TCP port to be listened for other MOMs status messages by ZeroMQ.
  */
-unsigned int pbs_status_port = 0;
+unsigned int g_pbs_status_port = 0;
 
 /**
  * Mom status update processor
@@ -1083,9 +1083,9 @@ void parse_command_line(
 
       case 'Z':
 
-        pbs_status_port = (unsigned int)atoi(optarg);
+        g_pbs_status_port = (unsigned int)atoi(optarg);
 
-        if (pbs_status_port == 0)
+        if (g_pbs_status_port == 0)
           {
           fprintf(stderr, "Bad Status port value %s\n",
                   optarg);
@@ -1815,7 +1815,7 @@ void set_globals_from_environment(void)
 #ifdef ZMQ
   if ((ptr = getenv("PBS_STATUS_SERVICE_PORT")) != NULL)
     {
-    pbs_status_port = (int)strtol(ptr, NULL, 10);
+    g_pbs_status_port = (int)strtol(ptr, NULL, 10);
     }
 #endif /* ZMQ */
 
@@ -1946,8 +1946,8 @@ int main(
     pbs_rm_port = get_svrport((char *)PBS_MANAGER_SERVICE_NAME, (char *)"tcp", PBS_MANAGER_SERVICE_PORT);
 
 #ifdef ZMQ
-  if (pbs_status_port <= 0)
-    pbs_status_port = get_svrport((char *)PBS_STATUS_SERVICE_NAME, (char *)"tcp", PBS_STATUS_SERVICE_PORT);
+  if (g_pbs_status_port <= 0)
+    g_pbs_status_port = get_svrport((char *)PBS_STATUS_SERVICE_NAME, (char *)"tcp", PBS_STATUS_SERVICE_PORT);
 #endif /* ZMQ */
 
   parse_command_line(argc, argv);
@@ -2177,7 +2177,7 @@ int main(
   if (g_use_zmq)
     {
     char endpoint[32];
-    sprintf(endpoint, "tcp://*:%d", pbs_status_port);
+    sprintf(endpoint, "tcp://*:%d", g_pbs_status_port);
     if (init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, start_process_pbs_status_port, ZMQ_ROUTER) != 0)
       {
       perror("pbs_server: ZeroMQ socket");

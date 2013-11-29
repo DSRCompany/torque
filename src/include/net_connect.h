@@ -201,6 +201,7 @@ enum zmq_connection_e
   {
   ZMQ_STATUS_RECEIVE = 0, /**< Status messages listening socket */
   ZMQ_STATUS_SEND,        /**< Status messages receiving socket */
+  ZMQ_IM_RECEIVE,         /**< Inter MOM communication receiving socket */
   ZMQ_CONNECTION_COUNT    /**< ZeroMQ sockets array length */
   };
 

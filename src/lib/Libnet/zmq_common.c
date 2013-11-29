@@ -289,6 +289,114 @@ int add_zconnection(
 
 
 /**
+ * Connects ZeroMQ socket to specified address
+ * @param socket ZeroMQ socket
+ * @param sock_addr address to connect to
+ * @return 0 if succeeded or -1 otherwise.
+ */  
+int zconnect(void *socket, struct sockaddr_in *sock_addr, int port)
+  {
+    #ifndef CONN_URL_LENGTH
+      #define CONN_URL_LENGTH 28
+    #endif
+    char conn_url_buf[CONN_URL_LENGTH]; // Max length: "tcp://123.123.123.123:12345\0" = 28
+    size_t printed_length;
+
+    printed_length = snprintf(conn_url_buf, CONN_URL_LENGTH, "tcp://%s:%u",
+        inet_ntoa(sock_addr->sin_addr), port ? port : ntohs(sock_addr->sin_port));
+    assert(printed_length < CONN_URL_LENGTH);
+      
+    int ret = zmq_connect(socket, conn_url_buf);
+    if (LOGLEVEL >= 10)
+    {
+      sprintf(log_buffer, "zmq_connect: ret: %d, errno: %d, socket: %p, URL: %s",
+          ret, errno, socket, conn_url_buf);
+      log_record(PBSEVENT_DEBUG, PBS_EVENTCLASS_NODE, __func__, log_buffer);
+    }
+    if (ret == -1)
+    {
+      sprintf(log_buffer, "zmq_connect: can't connect to the server %s", conn_url_buf);
+      log_err(errno, __func__, log_buffer);
+    }
+
+    return ret;
+  }
+
+
+
+/**
+ * Cerate ZeroMQ messages from json statuses
+ * @return 0 if succeeded or -1 otherwise.
+ */
+int zinit_msg(zmq_msg_t *msg, const TrqJson::Message &json_msg)
+  {
+  int ret = -1;
+  const char *message_data;
+  std::string *message_string;
+
+  message_string = json_msg.write();
+  message_data = message_string->c_str();
+
+  ret = zmq_msg_init_data(message, (void *)message_data, message_string->length(),
+      json_msg.deleteString, message_string);
+  if (ret)
+    {
+    /* clean up the data if error */
+    json_msg.deleteString((void *)message_data, (void *)message_string);
+    }
+  return ret;
+  }
+
+
+
+/**
+ * Sens status message
+ * @param socket ZeroMQ socket to send status messages
+ * @return 0 if succeeded or -1 otherwise.
+ */  
+int zsend(void *socket, zmq_msg_t *msg)
+  {
+  int ret = 0;
+
+  if (LOGLEVEL >= 9)
+    {
+    snprintf(log_buffer, sizeof(log_buffer), "Attempting to send ZMQ message");
+    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
+    }
+
+  if (!socket)
+    {
+    log_err(-1, __func__, "ZeroMQ socket was not initialized");
+    assert(0);
+    return -1;
+    }
+
+  ret = zmq_msg_send(&message, socket, ZMQ_DONTWAIT);
+  if (LOGLEVEL >= 10)
+    {
+    sprintf(log_buffer, "zmq_msg_send: rc=%d, errno=%d, socket=%p", ret, errno, socket);
+    log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER, __func__, log_buffer);
+    }
+
+  if (ret != -1)
+    {
+    if (LOGLEVEL >= 10)
+      {
+      snprintf(log_buffer, sizeof(log_buffer), "Successfully sent status update");
+      log_record(PBSEVENT_SYSTEM, PBS_EVENTCLASS_SERVER,__func__,log_buffer);
+      }
+    }
+  else
+    {
+    log_err(errno, __func__, "error sending status to the server");
+    }
+
+  return ret;
+  }
+
+
+
+/**
  * A handler for processing incoming status messages in Json format on a ZeroMQ socket. Read all
  * messages from the given socket and call the given handler for each message data.
  *

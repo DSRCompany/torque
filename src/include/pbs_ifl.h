@@ -555,6 +555,18 @@
 #define PBS_MOM_STATUS_SERVICE_PORT 15007
 #endif /* PBS_MOM_STATUS_SERVICE_PORT */
 
+/**
+ * Service name for ZeroMQ job control messaging MOM side port
+ */
+#define PBS_MOM_IM_SERVICE_NAME "pbs_mom_im"
+
+#ifndef PBS_MOM_IM_SERVICE_PORT
+/**
+ * Port number for ZeroMQ job control messaging MOM side port
+ */
+#define PBS_MOM_IM_SERVICE_PORT 15008
+#endif /* PBS_MOM_IM_SERVICE_PORT */
+
 #endif /* ZMQ */
 
 /*

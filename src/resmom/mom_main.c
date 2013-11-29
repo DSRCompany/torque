@@ -190,9 +190,13 @@ unsigned int pbs_mom_port = 0;
 unsigned int pbs_rm_port = 0;
 #ifdef ZMQ
 /**
- * The number of TCP port to be listened for other MOMs status messages by ZeroMQ.
+ * TCP port number to be listened for other MOMs status messages by ZeroMQ.
  */
-unsigned int pbs_status_port = 0;
+unsigned int g_pbs_status_port = 0;
+/**
+ * TCP port number to be listened for Job control messages by ZeroMQ.
+ */
+unsigned int g_pbs_im_port = 0;
 #endif /* ZMQ */
 tlist_head mom_polljobs; /* jobs that must have resource limits polled */
 tlist_head svr_newjobs; /* jobs being sent to MOM */
@@ -3273,15 +3277,40 @@ static int read_status(const size_t sz, const char *data)
 
 /**
  * A handler for processing incoming status messages in Json format on a ZeroMQ socket.
- * @param args handler arguments list (void **). For this handler the list have to contain a pointer
- * to the ZeroMQ socket to be read for data.
+ * @param args handler argument. For this handler args have to point to the ZeroMQ socket to be read
+ *             for data.
  */
-static void *status_request(void *args)
+static void *status_zrequest(void *args)
   {
-  void *zsock = *(void **)args;
+  void *zsock = args;
   process_status_request(zsock, read_status, false);        
   return(NULL);
-  }  /* END status_request() */
+  }  /* END status_zrequest() */
+
+
+
+/**
+ * Read job control message callback interface implementation for process_status_request() call.
+ * It's needed to call class method.
+ */
+static int read_im(const size_t sz, const char *data)
+  {
+  return read_im_request(sz, data);
+  }
+
+
+
+/**
+ * A handler for processing incoming job control messages in Json format on a ZeroMQ socket.
+ * @param args handler argument. For this handler args have to point to the ZeroMQ socket to be read
+ *             for data.
+ */
+static void *im_zrequest(void *args)
+  {
+  void *zsock = args;
+  process_status_request(zsock, read_im, false);        
+  return(NULL);
+  }  /* END im_zrequest() */
 
 #endif /* ZMQ */
 
@@ -3693,6 +3722,9 @@ void usage(
   fprintf(stderr, "  -d <PATH> \\\\ Home Dir\n");
   fprintf(stderr, "  -C <PATH> \\\\ Checkpoint Dir\n");
   fprintf(stderr, "  -D        \\\\ DEBUG - do not background\n");
+#ifdef ZMQ
+  fprintf(stderr, "  -E <INT>  \\\\ Job control Port\n");
+#endif /* ZMQ */
   fprintf(stderr, "  -h        \\\\ Print Usage\n");
   fprintf(stderr, "  -H <HOST> \\\\ Hostname\n");
   fprintf(stderr, "  -l        \\\\ MOM Log Dir Path\n");
@@ -3906,19 +3938,38 @@ void initialize_globals(void)
 
   if (ptr != NULL)
     {
-    pbs_status_port = (int)strtol(ptr, NULL, 10);
+    g_pbs_status_port = (int)strtol(ptr, NULL, 10);
     if (errno != 0)
       {
-      pbs_status_port = -1;
+      g_pbs_status_port = -1;
       }
     }
 
-  if (pbs_status_port <= 0)
+  if (g_pbs_status_port <= 0)
     {
-    pbs_status_port = get_svrport(
+    g_pbs_status_port = get_svrport(
         (char *)PBS_MOM_STATUS_SERVICE_NAME,
         (char *)"tcp",
         PBS_MOM_STATUS_SERVICE_PORT);
+    }
+
+  ptr = getenv("PBS_MOM_IM_SERVICE_PORT");
+
+  if (ptr != NULL)
+    {
+    g_pbs_im_port = (int)strtol(ptr, NULL, 10);
+    if (errno != 0)
+      {
+      g_pbs_im_port = -1;
+      }
+    }
+
+  if (g_pbs_im_port <= 0)
+    {
+    g_pbs_im_port = get_svrport(
+        (char *)PBS_MOM_IM_SERVICE_NAME,
+        (char *)"tcp",
+        PBS_MOM_IM_SERVICE_PORT);
     }
 #endif /* ZMQ */
 
@@ -4057,7 +4108,7 @@ void parse_command_line(
 
   errflg = 0;
 
-  while ((c = getopt(argc, argv, "a:A:c:C:d:DhH:l:L:mM:pPqrR:s:S:vwxzZ:-:")) != -1)
+  while ((c = getopt(argc, argv, "a:A:c:C:d:DE:hH:l:L:mM:pPqrR:s:S:vwxzZ:-:")) != -1)
     {
     switch (c)
       {
@@ -4318,11 +4369,25 @@ void parse_command_line(
 
       case 'Z':
 
-        pbs_status_port = (unsigned int)atoi(optarg);
+        g_pbs_status_port = (unsigned int)atoi(optarg);
 
-        if (pbs_status_port == 0)
+        if (g_pbs_status_port == 0)
           {
           fprintf(stderr, "Bad Status port value %s\n",
+                  optarg);
+
+          exit(1);
+          }
+
+        break;
+
+      case 'E':
+
+        g_pbs_im_port = (unsigned int)atoi(optarg);
+
+        if (g_pbs_im_port == 0)
+          {
+          fprintf(stderr, "Bad Job Control port value %s\n",
                   optarg);
 
           exit(1);
@@ -5159,8 +5224,16 @@ int setup_program_environment(void)
       return(1);
       }
 
-    sprintf(endpoint, "tcp://*:%d", pbs_status_port);
-    rc = init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, status_request, ZMQ_DEALER);
+    sprintf(endpoint, "tcp://*:%d", g_pbs_status_port);
+    rc = init_znetwork(ZMQ_STATUS_RECEIVE, endpoint, status_zrequest, ZMQ_DEALER);
+    if (rc)
+      {
+      log_err(-1, msg_daemonname, "init_znetwork failed to bind to ZeroMQ socket");
+      return(3);
+      }
+
+    sprintf(endpoint, "tcp://*:%d", g_pbs_im_port);
+    rc = init_znetwork(ZMQ_IM_RECEIVE, endpoint, im_zrequest, ZMQ_DEALER);
     if (rc)
       {
       log_err(-1, msg_daemonname, "init_znetwork failed to bind to ZeroMQ socket");
